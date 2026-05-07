@@ -1,0 +1,43 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CLADA runtime directories
+runtime/
+.clada/
+.comm/
+
+# Secrets
+.env
+.env.*
+secrets/
+*.pem
+*.key
+*.p12
+
+# Docs (generated, not source)
+docs/decisions/
+docs/spec/
+docs/iterations/
+docs/architecture.md

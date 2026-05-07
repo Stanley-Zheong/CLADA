@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLADA — 完整技术方案 v1.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --bg2: #0f1217;
+    --bg3: #141920;
+    --surface: #1a2030;
+    --border: #252d3d;
+    --border2: #2e3a50;
+    --accent: #4af0a0;
+    --accent2: #0ef;
+    --accent3: #f0a04a;
+    --warn: #f05a4a;
+    --text: #d4dde8;
+    --text2: #8899aa;
+    --text3: #556677;
+    --heading: #eef3f8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 300;
+    line-height: 1.8;
+    font-size: 15px;
+  }
+
+  /* SIDEBAR NAV */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0;
+    width: 240px;
+    height: 100vh;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 100;
+    padding: 32px 0;
+  }
+
+  .sidebar-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    color: var(--accent);
+    padding: 0 24px 24px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.05em;
+  }
+
+  .sidebar-logo span { color: var(--text3); font-size: 11px; display: block; font-weight: 400; margin-top: 4px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .nav-section { padding: 20px 24px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+
+  .nav-item {
+    display: block;
+    padding: 7px 24px;
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
+  }
+
+  .nav-item:hover { color: var(--accent); border-left-color: var(--accent); background: rgba(74,240,160,0.04); }
+
+  /* MAIN */
+  .main {
+    margin-left: 240px;
+    min-height: 100vh;
+  }
+
+  /* HERO */
+  .hero {
+    padding: 80px 64px 64px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(74,240,160,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 52px;
+    color: var(--heading);
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 em { color: var(--accent); font-style: normal; }
+
+  .hero-sub {
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 640px;
+    margin-bottom: 40px;
+    line-height: 1.7;
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text3); }
+  .meta-item strong { color: var(--text2); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+
+  /* CONTENT */
+  .content { padding: 0 64px 80px; }
+
+  .section {
+    padding: 64px 0 0;
+    border-top: 1px solid var(--border);
+    margin-top: 64px;
+  }
+
+  .section:first-child { border-top: none; margin-top: 0; padding-top: 64px; }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--heading);
+    margin-bottom: 24px;
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--heading);
+    margin: 32px 0 12px;
+  }
+
+  h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent2);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 24px 0 8px;
+  }
+
+  p { color: var(--text); margin-bottom: 14px; }
+
+  /* CARDS */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .card.green::before { background: var(--accent); }
+  .card.blue::before { background: var(--accent2); }
+  .card.orange::before { background: var(--accent3); }
+  .card.red::before { background: var(--warn); }
+
+  .card-icon { font-size: 22px; margin-bottom: 12px; }
+  .card-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; color: var(--heading); margin-bottom: 8px; }
+  .card-body { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .card-tag { display: inline-block; margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 3px 8px; border-radius: 3px; }
+  .card.green .card-tag { background: rgba(74,240,160,0.1); color: var(--accent); }
+  .card.blue .card-tag { background: rgba(0,238,255,0.1); color: var(--accent2); }
+  .card.orange .card-tag { background: rgba(240,160,74,0.1); color: var(--accent3); }
+  .card.red .card-tag { background: rgba(240,90,74,0.1); color: var(--warn); }
+
+  /* CODE BLOCKS */
+  pre {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 16px 0 24px;
+    position: relative;
+  }
+
+  pre code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .code-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .hl-green { color: var(--accent); }
+  .hl-blue { color: var(--accent2); }
+  .hl-orange { color: var(--accent3); }
+  .hl-red { color: var(--warn); }
+  .hl-dim { color: var(--text3); }
+
+  /* INLINE CODE */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    color: var(--accent2);
+  }
+
+  /* STATE MACHINE */
+  .state-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .state-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 16px;
+  }
+
+  .state-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .state-desc { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+  .state-box.active .state-name { color: var(--accent); }
+  .state-box.verify .state-name { color: var(--accent2); }
+  .state-box.warn .state-name { color: var(--accent3); }
+  .state-box.danger .state-name { color: var(--warn); }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    margin: 24px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+
+  .flow-arrow { color: var(--text3); }
+  .flow-state { color: var(--accent); font-weight: 500; }
+  .flow-trigger { color: var(--accent3); font-style: italic; }
+  .flow-agent { color: var(--accent2); }
+
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 13px;
+  }
+
+  th {
+    background: var(--surface);
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border2);
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.015); }
+
+  /* RISK BOX */
+  .risk-box {
+    background: rgba(240,90,74,0.07);
+    border: 1px solid rgba(240,90,74,0.25);
+    border-left: 3px solid var(--warn);
+    border-radius: 0 6px 6px 0;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+
+  .risk-box strong { color: var(--warn); font-family: 'JetBrains Mono', monospace; font-size: 11px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .note-box {
+    background: rgba(74,240,160,0.05);
+    border: 1px solid rgba(74,240,160,0.2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+
+  .note-box strong { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 11px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* FIELD SPEC */
+  .field-row {
+    display: grid;
+    grid-template-columns: 180px 80px 1fr;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: start;
+  }
+
+  .field-row:last-child { border-bottom: none; }
+  .field-name { font-family: 'JetBrains Mono', monospace; color: var(--accent2); font-size: 12px; }
+  .field-type { font-family: 'JetBrains Mono', monospace; color: var(--accent3); font-size: 11px; }
+  .field-desc { color: var(--text2); }
+
+  .badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+
+  .badge-hard { background: rgba(240,90,74,0.15); color: var(--warn); }
+  .badge-soft { background: rgba(74,240,160,0.1); color: var(--accent); }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  ul { padding-left: 20px; margin-bottom: 14px; }
+  li { margin-bottom: 6px; color: var(--text); font-size: 14px; }
+  li::marker { color: var(--accent); }
+
+  /* PROGRESS BAR */
+  .completeness {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+
+  .completeness-title { font-family: 'Syne', sans-serif; font-weight: 600; color: var(--heading); margin-bottom: 16px; }
+
+  .progress-item { margin-bottom: 12px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .progress-label span:first-child { color: var(--text2); }
+  .progress-label span:last-child { font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    CLADA
+    <span>Technical Specification v1.0</span>
+  </div>
+  <div class="nav-section">Overview</div>
+  <a class="nav-item" href="#overview">设计哲学</a>
+  <a class="nav-item" href="#architecture">三权分立架构</a>
+  <div class="nav-section">Core Design</div>
+  <a class="nav-item" href="#gateway">Gateway 控制器</a>
+  <a class="nav-item" href="#statemachine">状态机</a>
+  <a class="nav-item" href="#protocols">通讯协议</a>
+  <div class="nav-section">Documents</div>
+  <a class="nav-item" href="#contract">contract.json 规范</a>
+  <a class="nav-item" href="#dr">DR-xxx 规范</a>
+  <a class="nav-item" href="#memory">三级记忆系统</a>
+  <div class="nav-section">Implementation</div>
+  <a class="nav-item" href="#bootstrap">Bootstrap 引导</a>
+  <a class="nav-item" href="#isolation">隔离机制</a>
+  <a class="nav-item" href="#risks">技术风险清单</a>
+  <a class="nav-item" href="#roadmap">实现路线图</a>
+</nav>
+
+<div class="main">
+  <div class="hero">
+    <div class="hero-tag">// CLADA · Closed-Loop Autonomous Development Architecture</div>
+    <h1>让 AI 在<em>宪法约束</em>下<br>自主完成软件工程</h1>
+    <p class="hero-sub">
+      CLADA 不是聊天框的延伸，而是一套将 AI Agent 嵌入工业流水线的完整架构。
+      它通过物理隔离、层级记忆和双 Agent 互审，将 AI 编程的熵增问题系统性地解决。
+    </p>
+    <div class="hero-meta">
+      <div class="meta-item"><strong>Architecture</strong>三权分立 · 双 Agent</div>
+      <div class="meta-item"><strong>Executor</strong>DeepSeek V4（低成本执行）</div>
+      <div class="meta-item"><strong>Verifier</strong>Claude Sonnet（精准审计）</div>
+      <div class="meta-item"><strong>Gateway</strong>Python · PTY · fswatch</div>
+      <div class="meta-item"><strong>Isolation</strong>Docker · chmod 555</div>
+      <div class="meta-item"><strong>完整度</strong>95%（可进入实现阶段）</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- SECTION 1: 设计哲学 -->
+    <div class="section" id="overview">
+      <div class="section-label">§ 01 · Design Philosophy</div>
+      <h2>设计哲学：为什么需要 CLADA</h2>
+      <p>
+        传统 AI 编程的失败模式有三个根源：<strong>上下文熵增</strong>（长期迭代后 AI 忘记早期决策）、<strong>单点权威缺失</strong>（没有任何机制阻止 AI 改变自己的规则）、以及<strong>验证与执行混同</strong>（同一个 Agent 既写代码又判断代码好坏）。
+      </p>
+      <p>
+        CLADA 的核心思想是将这三个问题分别用三个机制解决：<strong>三级记忆</strong>解决熵增、<strong>宪法文件（Contract + ADR）</strong>解决权威缺失、<strong>双 Agent 分权</strong>解决验证混同。
+      </p>
+
+      <div class="card-grid">
+        <div class="card green">
+          <div class="card-icon">⚖️</div>
+          <div class="card-title">三权分立</div>
+          <div class="card-body">Owner（最高裁决）、Executor（执行权）、Verifier（审计权）三者权责边界由物理机制强制执行，而非依赖 Prompt 约定。</div>
+          <div class="card-tag">Constitutional</div>
+        </div>
+        <div class="card blue">
+          <div class="card-icon">🧠</div>
+          <div class="card-title">文档即共享内存</div>
+          <div class="card-body">Agent 之间没有直接对话。所有信息交换通过结构化文件进行，每个文件格式都经过严格定义，防止语义漂移。</div>
+          <div class="card-tag">Memory-First</div>
+        </div>
+        <div class="card orange">
+          <div class="card-icon">🔄</div>
+          <div class="card-title">状态机驱动</div>
+          <div class="card-body">系统在八个明确定义的状态之间跳转。每次状态转移都有物理触发条件，Gateway 是唯一的状态时钟。</div>
+          <div class="card-tag">Deterministic</div>
+        </div>
+        <div class="card red">
+          <div class="card-icon">🔒</div>
+          <div class="card-title">物理隔离</div>
+          <div class="card-body">Executor 的文件访问权限由 Gateway 在操作系统层级代理拦截。Verifier 的测试运行在 Docker 容器内，测试代码无法影响宿主机。</div>
+          <div class="card-tag">Hardware-Enforced</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: 三权分立架构 -->
+    <div class="section" id="architecture">
+      <div class="section-label">§ 02 · Architecture</div>
+      <h2>三权分立架构总览</h2>
+
+      <div class="flow">
+<span class="hl-dim">┌─────────────────────────────────────────────────────────────────┐</span>
+<span class="hl-dim">│</span>                    <span class="hl-orange">OWNER（最高裁决权）</span>                          <span class="hl-dim">│</span>
+<span class="hl-dim">│</span>              Gateway 控制台 · 实时监控 · 强制断点                  <span class="hl-dim">│</span>
+<span class="hl-dim">└───────────────────────────┬─────────────────────────────────────┘</span>
+                            <span class="hl-dim">│ 监控 / 指令</span>
+<span class="hl-dim">┌───────────────────────────▼─────────────────────────────────────┐</span>
+<span class="hl-dim">│</span>                <span class="hl-green">GATEWAY（状态机时钟）</span>                               <span class="hl-dim">│</span>
+<span class="hl-dim">│</span>   PTY 包装  ·  Pattern Monitor  ·  文件访问代理  ·  状态路由     <span class="hl-dim">│</span>
+<span class="hl-dim">└──────────────┬────────────────────────────┬────────────────────┘</span>
+               <span class="hl-dim">│ PTY/SIGSTOP</span>                <span class="hl-dim">│ Docker + Volume</span>
+<span class="hl-dim">┌──────────────▼──────────┐</span>  <span class="hl-dim">┌──────────▼─────────────────┐</span>
+<span class="hl-dim">│</span>  <span class="hl-green">EXECUTOR（执行权）</span>      <span class="hl-dim">│</span>  <span class="hl-blue">│  VERIFIER（审计权）        │</span>
+<span class="hl-dim">│</span>  DeepSeek V4           <span class="hl-dim">│</span>  <span class="hl-blue">│  Claude Sonnet             │</span>
+<span class="hl-dim">│</span>  · 只写代码             <span class="hl-dim">│</span>  <span class="hl-blue">│  · 只写文档 + 审计报告     │</span>
+<span class="hl-dim">│</span>  · 只读 spec/           <span class="hl-dim">│</span>  <span class="hl-blue">│  · 运行测试（容器内）      │</span>
+<span class="hl-dim">│</span>  · 遇歧义必须上报       <span class="hl-dim">│</span>  <span class="hl-blue">│  · 引用 ADR 做裁决         │</span>
+<span class="hl-dim">└──────────────┬──────────┘</span>  <span class="hl-blue">└─────────────┬──────────────┘</span>
+               <span class="hl-dim">│ 写入</span>                        <span class="hl-dim">│ 写入</span>
+<span class="hl-dim">┌──────────────▼──────────────────────────▼────────────────────────┐</span>
+<span class="hl-dim">│</span>                   <span class="hl-orange">共享文档层（唯一共享内存）</span>                       <span class="hl-dim">│</span>
+<span class="hl-dim">│</span>  contract.json · DR-xxx.md · current_spec.md · audit_report.json  <span class="hl-dim">│</span>
+<span class="hl-dim">└──────────────────────────────────────────────────────────────────┘</span>
+      </div>
+
+      <h3>角色权限边界（硬性规定）</h3>
+      <table>
+        <tr>
+          <th>能力</th>
+          <th>Owner</th>
+          <th>Executor</th>
+          <th>Verifier</th>
+        </tr>
+        <tr>
+          <td>写入源代码 <code>src/</code></td>
+          <td>✅</td><td>✅</td><td>❌</td>
+        </tr>
+        <tr>
+          <td>写入文档 <code>docs/</code></td>
+          <td>✅</td><td>❌（Gateway 拦截）</td><td>✅</td>
+        </tr>
+        <tr>
+          <td>读取 <code>docs/decisions/</code></td>
+          <td>✅</td><td>✅（只读）</td><td>✅</td>
+        </tr>
+        <tr>
+          <td>读取 <code>.env</code> / secrets</td>
+          <td>✅</td><td>❌（Gateway 拦截）</td><td>❌</td>
+        </tr>
+        <tr>
+          <td>执行 <code>git merge main</code></td>
+          <td>✅</td><td>❌</td><td>❌</td>
+        </tr>
+        <tr>
+          <td>触发状态转移</td>
+          <td>✅（斜杠命令）</td><td>部分（输出触发词）</td><td>部分（审计结论）</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- SECTION 3: Gateway -->
+    <div class="section" id="gateway">
+      <div class="section-label">§ 03 · Gateway</div>
+      <h2>Gateway 控制器详细设计</h2>
+      <p>Gateway 是整个系统的神经中枢，以 <code>orchestrator.py</code> 形式运行。它不是简单的脚本，而是一个多线程进程管理器。</p>
+
+      <h3>核心组件</h3>
+      <div class="card-grid">
+        <div class="card green">
+          <div class="card-title">PTY Wrapper</div>
+          <div class="card-body">通过 <code>pty.openpty()</code> 启动 Agent 进程。Agent 认为自己在与标准终端对话，Gateway 截获所有 I/O 流。支持 SIGSTOP / SIGCONT 物理挂起。</div>
+        </div>
+        <div class="card blue">
+          <div class="card-title">Pattern Monitor 线程</div>
+          <div class="card-body">持续嗅探 Executor 的 stdout。正则匹配触发词（<code>[REQ_REVIEW]</code>、<code>[DONE]</code>、<code>[B_PLAN]</code>）后立即发出状态切换指令。</div>
+        </div>
+        <div class="card orange">
+          <div class="card-title">文件访问代理</div>
+          <div class="card-body">通过 LD_PRELOAD 或 ptrace 拦截 Executor 进程的文件系统调用。禁止读取 <code>.env</code>、<code>secrets/</code>、<code>docs/decisions/</code>（写操作）。</div>
+        </div>
+        <div class="card red">
+          <div class="card-title">Heartbeat 守护线程</div>
+          <div class="card-body">30 秒计时器。stdout 静默超时后向 PTY 发送 <code>#: heartbeat\n</code> 探针。若无响应，发送 <code>show current status</code> 强制 Executor 输出 TRACE。</div>
+        </div>
+      </div>
+
+      <h3>current_state.json — 全局状态文件</h3>
+      <div class="code-label">runtime / current_state.json</div>
+      <pre><code>{
+  <span class="hl-green">"state"</span>: <span class="hl-orange">"EXECUTING"</span>,          <span class="hl-dim">// 当前状态机状态</span>
+  <span class="hl-green">"active_agent"</span>: <span class="hl-orange">"executor"</span>,   <span class="hl-dim">// 当前持有文件写权限的 Agent</span>
+  <span class="hl-green">"src_lock"</span>: <span class="hl-blue">false</span>,            <span class="hl-dim">// AUDITING 阶段置 true，触发 chmod 555</span>
+  <span class="hl-green">"executor_pid"</span>: <span class="hl-blue">31245</span>,
+  <span class="hl-green">"verifier_pid"</span>: <span class="hl-blue">31289</span>,
+  <span class="hl-green">"quota_remaining"</span>: <span class="hl-blue">7</span>,          <span class="hl-dim">// Executor 剩余询问次数</span>
+  <span class="hl-green">"iteration_id"</span>: <span class="hl-orange">"IT-042"</span>,
+  <span class="hl-green">"last_trace_ts"</span>: <span class="hl-blue">1716880200</span>,  <span class="hl-dim">// 上次 TRACE 输出时间戳</span>
+  <span class="hl-green">"b_plan_detected"</span>: <span class="hl-blue">false</span>,      <span class="hl-dim">// 是否出现过 [B_PLAN] 标签</span>
+  <span class="hl-green">"autopilot"</span>: <span class="hl-blue">false</span>             <span class="hl-dim">// Owner 离线模式开关</span>
+}</code></pre>
+
+      <h3>斜杠命令（Owner 控制接口）</h3>
+      <table>
+        <tr><th>命令</th><th>触发状态</th><th>动作</th></tr>
+        <tr><td><code>/init</code></td><td>IDLE → BOOTSTRAP</td><td>引导用户输入 Goal，启动创世流程</td></tr>
+        <tr><td><code>/propose</code></td><td>IDLE → PROPOSING</td><td>唤醒 Verifier，加载 L2 架构文档，生成新 Spec</td></tr>
+        <tr><td><code>/execute</code></td><td>PROPOSING → EXECUTING</td><td>切换至 Executor，注入 current_spec.md</td></tr>
+        <tr><td><code>/merge</code></td><td>PENDING_COMMIT → IDLE</td><td>执行 git merge，归档 IT-xxx.md，重置状态</td></tr>
+        <tr><td><code>/reject</code></td><td>PENDING_COMMIT → EXECUTING</td><td>将拒绝理由注入 Executor STDIN，继续修改</td></tr>
+        <tr><td><code>/abort</code></td><td>任意 → IDLE</td><td>触发 Clean Shutdown 协议，stash 现场</td></tr>
+      </table>
+    </div>
+
+    <!-- SECTION 4: 状态机 -->
+    <div class="section" id="statemachine">
+      <div class="section-label">§ 04 · State Machine</div>
+      <h2>完整状态机定义</h2>
+
+      <h3>八个状态</h3>
+      <div class="state-grid">
+        <div class="state-box">
+          <div class="state-name">IDLE</div>
+          <div class="state-desc">系统等待 Owner 指令。无 Agent 持有文件写权限。</div>
+        </div>
+        <div class="state-box warn">
+          <div class="state-name">BOOTSTRAP</div>
+          <div class="state-desc">创世阶段。Verifier 以"格式化工具模式"生成初始 Contract 和 DR-001。Owner 必须高强度介入确认。</div>
+        </div>
+        <div class="state-box verify">
+          <div class="state-name">PROPOSING</div>
+          <div class="state-desc">Verifier 接管。读取 L2 文档，与 Owner 协商，输出 current_spec.md。</div>
+        </div>
+        <div class="state-box active">
+          <div class="state-name">EXECUTING</div>
+          <div class="state-desc">Executor 持有代码写权限。每修改 3 个文件输出一次 [TRACE]。Heartbeat 守护激活。</div>
+        </div>
+        <div class="state-box warn">
+          <div class="state-name">SUSPENDED</div>
+          <div class="state-desc">Executor 发出 [REQ_REVIEW]。Gateway 发送 SIGSTOP，检查 TCP 连接状态，准备切换至 Verifier。</div>
+        </div>
+        <div class="state-box verify">
+          <div class="state-name">ARBITRATING</div>
+          <div class="state-desc">Verifier 接管。必须引用 DR-xxx 做裁决，将决策追加注入 Executor STDIN。</div>
+        </div>
+        <div class="state-box verify">
+          <div class="state-name">AUDITING</div>
+          <div class="state-desc">src/ 目录 chmod 555 锁定。Verifier 在 Docker 容器内运行测试，生成 audit_report.json。</div>
+        </div>
+        <div class="state-box warn">
+          <div class="state-name">PENDING_COMMIT</div>
+          <div class="state-desc">审计通过，等待 Owner 执行 /merge 或 /reject。若含 [B_PLAN] 则不可进入 autopilot。</div>
+        </div>
+      </div>
+
+      <h3>完整状态转移表</h3>
+      <table>
+        <tr><th>From</th><th>To</th><th>触发条件</th><th>Gateway 动作</th></tr>
+        <tr>
+          <td>IDLE</td><td>BOOTSTRAP</td>
+          <td>Owner 执行 <code>/init</code></td>
+          <td>启动 Verifier 进程，加载 Meta-Schema，提示双检锁警告</td>
+        </tr>
+        <tr>
+          <td>BOOTSTRAP</td><td>IDLE</td>
+          <td>Owner 点击 Confirm（双检锁通过）</td>
+          <td>写入 DR-001.md，生成 L2 index.json，标注"未经历史 ADR 审计"警告</td>
+        </tr>
+        <tr>
+          <td>IDLE</td><td>PROPOSING</td>
+          <td>Owner 执行 <code>/propose</code></td>
+          <td>注入 L2 架构文档 + 相关 DR 摘要到 Verifier 上下文</td>
+        </tr>
+        <tr>
+          <td>PROPOSING</td><td>EXECUTING</td>
+          <td>Verifier 输出确认的 current_spec.md</td>
+          <td>切换至 Executor PTY，写入 Spec，重置 Quota 计数器</td>
+        </tr>
+        <tr>
+          <td>EXECUTING</td><td>SUSPENDED</td>
+          <td>stdout 出现 <code>[REQ_REVIEW]</code> 或 ACCESS_DENIED</td>
+          <td>发送 SIGSTOP，检查 TCP 连接，读取 q_waiting.json</td>
+        </tr>
+        <tr>
+          <td>SUSPENDED</td><td>ARBITRATING</td>
+          <td>Verifier 进程就绪</td>
+          <td>将 q_waiting.json + 相关 DR 注入 Verifier 上下文</td>
+        </tr>
+        <tr>
+          <td>ARBITRATING</td><td>EXECUTING</td>
+          <td>Verifier 输出裁决</td>
+          <td>将裁决以 SYSTEM_NOTIFICATION 格式写入 Executor STDIN，发送 SIGCONT，Quota -1</td>
+        </tr>
+        <tr>
+          <td>EXECUTING</td><td>AUDITING</td>
+          <td>stdout 出现 <code>[DONE]</code></td>
+          <td>chmod -R 555 src/，拉起 Docker 容器，Volume 只读挂载</td>
+        </tr>
+        <tr>
+          <td>AUDITING</td><td>EXECUTING</td>
+          <td>audit_report.json 中 failure_count &gt; 0</td>
+          <td>chmod -R 755 src/，将失败摘要写入 Executor STDIN</td>
+        </tr>
+        <tr>
+          <td>AUDITING</td><td>PENDING_COMMIT</td>
+          <td>所有测试通过 且 无 [B_PLAN]</td>
+          <td>chmod -R 755 src/，git checkout -b feature-xxx，通知 Owner</td>
+        </tr>
+        <tr>
+          <td>AUDITING</td><td>WAITING_FOR_OWNER</td>
+          <td>所有测试通过 但 含 [B_PLAN]</td>
+          <td>强制阻塞，禁止 autopilot，Owner 必须手动审阅 B_PLAN 决策</td>
+        </tr>
+        <tr>
+          <td>EXECUTING</td><td>IDLE</td>
+          <td>Quota 耗尽（异常终止）</td>
+          <td>触发 Clean Shutdown 协议（见下文）</td>
+        </tr>
+      </table>
+
+      <h3>Clean Shutdown 协议（异常终止善后）</h3>
+      <div class="code-label">Gateway 原子操作序列</div>
+      <pre><code><span class="hl-dim"># 1. 强制快照（不触发 pre-commit hooks）</span>
+git add -A
+git commit -m <span class="hl-orange">"[CLADA_INTERRUPTED]: Quota exhausted at IT-042"</span> --no-verify
+git checkout -b clada/interrupted/IT-042
+
+<span class="hl-dim"># 2. 保存中断现场</span>
+{
+  <span class="hl-green">"iteration_id"</span>: <span class="hl-orange">"IT-042"</span>,
+  <span class="hl-green">"last_trace"</span>: <span class="hl-orange">"[TRACE] Modified: auth.ts, db.ts, session.ts"</span>,
+  <span class="hl-green">"pending_question"</span>: <span class="hl-orange">"..."</span>,   <span class="hl-dim">// 来自 q_waiting.json（如有）</span>
+  <span class="hl-green">"modified_files"</span>: [<span class="hl-orange">"src/auth.ts"</span>, <span class="hl-orange">"src/db.ts"</span>],
+  <span class="hl-green">"stack_summary"</span>: <span class="hl-orange">"..."</span>         <span class="hl-dim">// Summarizer 生成的摘要</span>
+} <span class="hl-dim">→ interrupted_state.json</span>
+
+<span class="hl-dim"># 3. 提示 Owner 选择</span>
+<span class="hl-orange">"任务在 IT-042 中断。代码已保存至 clada/interrupted/IT-042 分支。"</span>
+<span class="hl-orange">"[A] 补充 Quota 继续  [B] 回滚至 main  [C] 保留分支稍后处理"</span></code></pre>
+    </div>
+
+    <!-- SECTION 5: 通讯协议 -->
+    <div class="section" id="protocols">
+      <div class="section-label">§ 05 · Communication Protocols</div>
+      <h2>Agent 间通讯协议</h2>
+
+      <h3>ARBITRATING → EXECUTING：Append Injection</h3>
+      <p>Verifier 的裁决通过 Gateway 以 <strong>SYSTEM_NOTIFICATION</strong> 格式直接写入 Executor 的 PTY STDIN，伪装成 Owner 指令。Executor 不需要读取第三方文件，在会话流中直接获取最新指令。</p>
+      <div class="code-label">注入格式（写入 Executor PTY STDIN）</div>
+      <pre><code>[SYSTEM_NOTIFICATION]: Verifier has resolved your query.
+Decision: <span class="hl-green">{裁决内容}</span>
+Referenced ADR: <span class="hl-orange">DR-024</span>
+Constraint: This decision is binding. Do not deviate.
+Please integrate this decision and continue your current task.</code></pre>
+
+      <h3>EXECUTING → SUSPENDED：q_waiting.json</h3>
+      <div class="code-label">.comm/q_waiting.json</div>
+      <pre><code>{
+  <span class="hl-green">"iteration_id"</span>: <span class="hl-orange">"IT-042"</span>,
+  <span class="hl-green">"question_id"</span>: <span class="hl-orange">"Q-007"</span>,
+  <span class="hl-green">"type"</span>: <span class="hl-orange">"interface_ambiguity"</span>,   <span class="hl-dim">// 歧义类型</span>
+  <span class="hl-green">"context"</span>: <span class="hl-orange">"Spec 未定义跨模块接口的错误传递方式"</span>,
+  <span class="hl-green">"affected_files"</span>: [<span class="hl-orange">"src/auth.ts"</span>, <span class="hl-orange">"src/session.ts"</span>],
+  <span class="hl-green">"quota_used"</span>: <span class="hl-blue">3</span>,
+  <span class="hl-green">"timestamp"</span>: <span class="hl-blue">1716880200</span>
+}</code></pre>
+
+      <h3>[TRACE] 输出规范</h3>
+      <div class="code-label">Executor 每修改 3 个文件输出一次</div>
+      <pre><code>[TRACE] IT-042 | Modified: src/auth.ts, src/db.ts, src/session.ts
+[TRACE] Status: Implementing login endpoint per ASSERT-01
+[TRACE] Next: Write unit test for Argon2id hash verification</code></pre>
+      <p><strong>消费路径</strong>：Gateway 实时将 TRACE 发送给 Summarizer（轻量级模型），生成 <code>current_progress.md</code>，供 Owner 实时查看。Summarizer 输出<strong>严禁</strong>进入 Executor 或 Verifier 的上下文。</p>
+
+      <h3>[B_PLAN] 标签协议</h3>
+      <div class="note-box">
+        <strong>触发条件</strong>
+        Executor Quota 耗尽但任务未完成时，必须在下一次代码提交中附加 [B_PLAN] 标签，表明此次决策为"无Spec依据的主观判断"。
+      </div>
+      <pre><code><span class="hl-dim">// 代码注释中标注</span>
+<span class="hl-orange">// [B_PLAN]: Session expiry set to 24h — no spec guidance, owner must confirm</span>
+
+<span class="hl-dim">// TRACE 中也必须出现</span>
+[TRACE] [B_PLAN] IT-042 | Decision without spec: session TTL = 86400s</code></pre>
+      <p><strong>审计后果</strong>：Verifier 发现 [B_PLAN] 后，即便测试全部通过，审计结论为 <code>PASS_WITH_RISK</code>，强制进入 WAITING_FOR_OWNER，<strong>禁止 autopilot 合并</strong>。</p>
+    </div>
+
+    <!-- SECTION 6: contract.json -->
+    <div class="section" id="contract">
+      <div class="section-label">§ 06 · Contract Specification</div>
+      <h2>contract.json 完整规范</h2>
+      <p>Contract 是系统的"机器可读宪法"，优先级高于一切自然语言文档。Verifier 以此为审计标准，Executor 以此为实现边界。</p>
+
+      <h3>字段分类</h3>
+      <div class="field-row">
+        <div class="field-name">contract_id <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">string</div>
+        <div class="field-desc">格式 CNT-xxx，唯一标识。版本升级时创建新 CNT，旧 CNT 标记 superseded_by。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">version <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">semver</div>
+        <div class="field-desc">语义化版本。Hard Fields 变更必须升 major，Soft Fields 变更升 minor。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">scope.modules <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">string[]</div>
+        <div class="field-desc">本 Contract 覆盖的模块列表。Executor 不得修改范围外的模块而不创建新 Contract。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">scope.interfaces <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">string[]</div>
+        <div class="field-desc">涉及的 API 端点或函数签名。格式：<code>METHOD /path</code> 或 <code>FunctionName(args): ReturnType</code>。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">constraints.strict_types <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">boolean</div>
+        <div class="field-desc">是否强制严格类型。影响 Verifier 的类型检查策略。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">constraints.max_latency_ms <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">number</div>
+        <div class="field-desc">性能硬指标。Verifier 的测试脚本中必须包含延迟断言。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">constraints.allowed_dependencies <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">string[]</div>
+        <div class="field-desc">白名单依赖库。Executor 引入白名单外依赖时 Gateway 拦截并报错。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">hard_assertions <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">Assertion[]</div>
+        <div class="field-desc">每条断言包含 id、description、check_script（可执行验证脚本路径）。Verifier 直接运行脚本，不做主观判断。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">soft_recommendations <span class="badge badge-soft">Soft</span></div>
+        <div class="field-type">Rec[]</div>
+        <div class="field-desc">编码风格建议，不影响审计结论。Owner 在双检锁阶段自行选择。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">superseded_by <span class="badge badge-soft">Soft</span></div>
+        <div class="field-type">string?</div>
+        <div class="field-desc">废弃时填写继任 CNT 编号。RAG 系统据此过滤过期 Contract。</div>
+      </div>
+
+      <h3>完整示例</h3>
+      <div class="code-label">docs/spec/contract.json</div>
+      <pre><code>{
+  <span class="hl-green">"contract_id"</span>: <span class="hl-orange">"CNT-001"</span>,
+  <span class="hl-green">"version"</span>: <span class="hl-orange">"1.0.0"</span>,
+  <span class="hl-green">"created_by"</span>: <span class="hl-orange">"bootstrap-dual-lock"</span>,
+  <span class="hl-green">"bootstrap_warning"</span>: <span class="hl-orange">"未经历史 ADR 审计，由 Owner 手动确认"</span>,
+  <span class="hl-green">"scope"</span>: {
+    <span class="hl-green">"modules"</span>: [<span class="hl-orange">"auth"</span>, <span class="hl-orange">"database"</span>],
+    <span class="hl-green">"interfaces"</span>: [<span class="hl-orange">"POST /v1/login"</span>, <span class="hl-orange">"POST /v1/logout"</span>]
+  },
+  <span class="hl-green">"constraints"</span>: {
+    <span class="hl-green">"strict_types"</span>: <span class="hl-blue">true</span>,
+    <span class="hl-green">"max_latency_ms"</span>: <span class="hl-blue">200</span>,
+    <span class="hl-green">"allowed_dependencies"</span>: [<span class="hl-orange">"zod"</span>, <span class="hl-orange">"argon2"</span>, <span class="hl-orange">"jsonwebtoken"</span>]
+  },
+  <span class="hl-green">"hard_assertions"</span>: [
+    {
+      <span class="hl-green">"id"</span>: <span class="hl-orange">"ASSERT-01"</span>,
+      <span class="hl-green">"description"</span>: <span class="hl-orange">"密码必须在存储前用 Argon2id 哈希处理"</span>,
+      <span class="hl-green">"check_script"</span>: <span class="hl-orange">"npm run test:security"</span>
+    },
+    {
+      <span class="hl-green">"id"</span>: <span class="hl-orange">"ASSERT-02"</span>,
+      <span class="hl-green">"description"</span>: <span class="hl-orange">"登录接口 P95 延迟必须低于 200ms"</span>,
+      <span class="hl-green">"check_script"</span>: <span class="hl-orange">"npm run test:perf -- --assert-p95=200"</span>
+    }
+  ],
+  <span class="hl-green">"soft_recommendations"</span>: [
+    {
+      <span class="hl-green">"id"</span>: <span class="hl-orange">"REC-01"</span>,
+      <span class="hl-green">"description"</span>: <span class="hl-orange">"优先使用 async/await 而非裸 Promise"</span>
+    }
+  ],
+  <span class="hl-green">"superseded_by"</span>: <span class="hl-blue">null</span>
+}</code></pre>
+
+      <h3>Contract 版本演进规则</h3>
+      <p>当 Contract 从 1.0.0 升级时，旧 CNT 不删除，标记 <code>superseded_by: "CNT-002"</code>。历史 DR 中引用旧 CNT 编号的记录保持原样（历史真实性），但 RAG 检索时通过 L2 index.json 的 superseded 字段自动过滤，不向 Agent 提供过期 Contract 内容。</p>
+    </div>
+
+    <!-- SECTION 7: DR-xxx -->
+    <div class="section" id="dr">
+      <div class="section-label">§ 07 · Decision Records</div>
+      <h2>DR-xxx.md 决策记录规范</h2>
+      <p>DR（Decision Record）是系统的"判例法库"。所有重大决策必须记录，Verifier 在仲裁时必须引用 DR 而非凭空判断。</p>
+
+      <h3>Front-matter 字段（机器可读，RAG 过滤依据）</h3>
+      <div class="field-row">
+        <div class="field-name">id <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">DR-xxx</div>
+        <div class="field-desc">三位数字编号，唯一，递增。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">title <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">string</div>
+        <div class="field-desc">一句话描述决策内容。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">status <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">enum</div>
+        <div class="field-desc"><code>proposed</code> | <code>accepted</code> | <code>superseded</code>。RAG 过滤器据此剔除 superseded 记录。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">superseded_by <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">DR-xxx?</div>
+        <div class="field-desc">若 status 为 superseded，必须填写继任 DR 编号。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">date <span class="badge badge-hard">Hard</span></div>
+        <div class="field-type">YYYY-MM-DD</div>
+        <div class="field-desc">决策日期，用于 RAG 按时间排序。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">tags <span class="badge badge-soft">Soft</span></div>
+        <div class="field-type">string[]</div>
+        <div class="field-desc">分类标签，用于 RAG 关键词检索。</div>
+      </div>
+      <div class="field-row">
+        <div class="field-name">related_contract <span class="badge badge-soft">Soft</span></div>
+        <div class="field-type">CNT-xxx?</div>
+        <div class="field-desc">与本决策关联的 Contract 版本。</div>
+      </div>
+
+      <h3>完整示例</h3>
+      <div class="code-label">docs/decisions/DR-024.md</div>
+      <pre><code><span class="hl-dim">---</span>
+<span class="hl-green">id</span>: DR-024
+<span class="hl-green">title</span>: 使用 DeepSeek V4 作为 Executor 模型
+<span class="hl-green">status</span>: accepted
+<span class="hl-green">superseded_by</span>: null
+<span class="hl-green">date</span>: 2026-05-04
+<span class="hl-green">tags</span>: [model-selection, cost-control]
+<span class="hl-green">related_contract</span>: CNT-001
+<span class="hl-dim">---</span>
+
+## Context
+初始方案使用 Claude Opus，但长期运行的 Token 成本过高，在 100 天迭代周期内不可持续。
+
+## Decision
+切换至 DeepSeek V4-Pro 通过 CLI Bridge 接入作为 Executor 模型。
+
+## Rationale
+V4-Pro 在编码基准测试中达到可比分数，成本降低约 90%，对长周期 Ralph Loop 至关重要。
+
+## Trade-offs
+- **放弃**：Claude Opus 在复杂推理任务中的优势
+- **获得**：每月约 $500 的成本节省，可持续运行能力
+
+## Consequences
+- ✅ 总 Token 成本下降 90%
+- ⚠️ 复杂推理任务延迟轻微上升
+- ❌ 部分多语言任务质量略有下降
+
+## Verification
+- Gateway 仪表盘监控 Token 用量
+- 每次 Audit 运行 <span class="hl-orange">`npm run test:audit`</span> 验证编码准确性</code></pre>
+    </div>
+
+    <!-- SECTION 8: 三级记忆 -->
+    <div class="section" id="memory">
+      <div class="section-label">§ 08 · Memory System</div>
+      <h2>三级记忆系统</h2>
+      <p>三级记忆是对抗"100天后幻觉"的核心机制。每一级有明确的写入者、读取时机和过期机制。</p>
+
+      <div class="card-grid">
+        <div class="card green">
+          <div class="card-title">L1 · Active（工作记忆）</div>
+          <div class="card-body">
+            <strong style="color:var(--accent)">内容：</strong>当前修改文件 + current_spec.md + .cursorrules<br><br>
+            <strong style="color:var(--accent)">机制：</strong>Gateway 在每次唤醒 Agent 时动态注入 System Prompt。Agent 的上下文窗口只包含当前任务相关内容。<br><br>
+            <strong style="color:var(--accent)">生命周期：</strong>单次 Iteration
+          </div>
+          <div class="card-tag">In-Context</div>
+        </div>
+        <div class="card blue">
+          <div class="card-title">L2 · Structural（架构记忆）</div>
+          <div class="card-body">
+            <strong style="color:var(--accent2)">内容：</strong>DR-xxx.md 集合 + architecture.md + L2 index.json<br><br>
+            <strong style="color:var(--accent2)">写入者：</strong>Verifier（每次 ARBITRATING 后更新）<br><br>
+            <strong style="color:var(--accent2)">读取时机：</strong>/propose 和 /ask_verifier 时强制读取<br><br>
+            <strong style="color:var(--accent2)">过期机制：</strong>index.json 维护 superseded 字段，Gateway 在注入前预过滤
+          </div>
+          <div class="card-tag">File-Based</div>
+        </div>
+        <div class="card orange">
+          <div class="card-title">L3 · Historical（向量记忆）</div>
+          <div class="card-body">
+            <strong style="color:var(--accent3)">内容：</strong>IT-xxx.md（迭代快照）+ 对话全量 Log<br><br>
+            <strong style="color:var(--accent3)">写入者：</strong>后台异步脚本，每次 Iteration 结束后压缩写入<br><br>
+            <strong style="color:var(--accent3)">检索策略：</strong>双重检索（关键词 + AST 代码片段），Verifier 对结果二次过滤<br><br>
+            <strong style="color:var(--accent3)">过期机制：</strong>Gateway 在喂给 Agent 前检查 DR front-matter，剔除 superseded 记录
+          </div>
+          <div class="card-tag">Vector RAG</div>
+        </div>
+      </div>
+
+      <h3>L2 index.json 结构</h3>
+      <div class="code-label">docs/decisions/index.json（Gateway 过滤依据）</div>
+      <pre><code>{
+  <span class="hl-green">"decisions"</span>: [
+    {
+      <span class="hl-green">"id"</span>: <span class="hl-orange">"DR-024"</span>,
+      <span class="hl-green">"status"</span>: <span class="hl-orange">"accepted"</span>,
+      <span class="hl-green">"superseded_by"</span>: <span class="hl-blue">null</span>,
+      <span class="hl-green">"tags"</span>: [<span class="hl-orange">"model-selection"</span>],
+      <span class="hl-green">"summary"</span>: <span class="hl-orange">"使用 DeepSeek V4 作为 Executor，节省 90% 成本"</span>
+    },
+    {
+      <span class="hl-green">"id"</span>: <span class="hl-orange">"DR-005"</span>,
+      <span class="hl-green">"status"</span>: <span class="hl-orange">"superseded"</span>,
+      <span class="hl-green">"superseded_by"</span>: <span class="hl-orange">"DR-024"</span>,
+      <span class="hl-green">"tags"</span>: [<span class="hl-orange">"model-selection"</span>],
+      <span class="hl-green">"summary"</span>: <span class="hl-orange">"[DEPRECATED] 使用 Claude Opus 作为 Executor"</span>
+    }
+  ],
+  <span class="hl-green">"contracts"</span>: [
+    { <span class="hl-green">"id"</span>: <span class="hl-orange">"CNT-001"</span>, <span class="hl-green">"status"</span>: <span class="hl-orange">"active"</span>, <span class="hl-green">"version"</span>: <span class="hl-orange">"1.0.0"</span> }
+  ]
+}</code></pre>
+    </div>
+
+    <!-- SECTION 9: Bootstrap -->
+    <div class="section" id="bootstrap">
+      <div class="section-label">§ 09 · Bootstrap</div>
+      <h2>Bootstrap 引导流程（clada init）</h2>
+      <p>Bootstrap 是 CLADA 唯一要求 Owner 高强度介入的阶段。此阶段生成的 Contract 和 ADR 是整个项目的"宪法创世"，必须经过双检锁确认后才能进入稳态。</p>
+
+      <div class="risk-box">
+        <strong>⚠ Bootstrap 警告</strong>
+        此阶段 Verifier 处于"格式化工具模式"，没有历史 ADR 可参考。生成的 contract.json 必须由 Owner 像审计法律合同一样仔细审阅。系统会在 Contract 上自动标注 bootstrap_warning 字段，直到经过至少一次完整 Iteration 验证后才移除。
+      </div>
+
+      <h3>双检锁机制</h3>
+      <p>Bootstrap 阶段由两个不同模型分别生成 Contract，Gateway 进行字段级比对，Owner 只仲裁差异点。</p>
+
+      <div class="flow">
+<span class="hl-dim">Step 1</span>  Owner 输入 Goal 文本
+          <span class="flow-arrow">↓</span>
+<span class="hl-dim">Step 2</span>  <span class="flow-agent">Model A (Claude)</span> 生成 contract_a.json
+          <span class="flow-agent">Model B (GPT-4o)</span> 生成 contract_b.json
+          <span class="flow-arrow">↓ 并行</span>
+<span class="hl-dim">Step 3</span>  Gateway 执行 Hard Fields 字段级 Key-Value 比对
+          <span class="flow-arrow">↓</span>
+<span class="hl-dim">Step 4a</span> Hard Fields 不一致 → <span class="hl-red">标红，Owner 必须手动选择</span>
+<span class="hl-dim">Step 4b</span> Soft Fields 不一致 → <span class="hl-orange">标黄，Owner 可选择或忽略</span>
+<span class="hl-dim">Step 4c</span> 所有字段一致 → <span class="hl-green">自动通过</span>
+          <span class="flow-arrow">↓</span>
+<span class="hl-dim">Step 5</span>  Owner 点击 Confirm → contract.json 状态从"流体"变为"晶体"
+          <span class="flow-arrow">↓</span>
+<span class="hl-dim">Step 6</span>  系统写入 DR-001.md（技术选型决策）
+          生成初始 L2 index.json
+          标注 bootstrap_warning，进入 IDLE
+      </div>
+
+      <h3>冷启动 RAG 处理</h3>
+      <p>若 L3 为空（新项目），Gateway 扫描现有代码库生成 Repo Map，作为第一份 <code>architecture.md</code> 写入 L2。若代码库也为空，则 architecture.md 仅包含 Goal 和技术栈选型，后续每次 Iteration 增量追加。</p>
+    </div>
+
+    <!-- SECTION 10: 隔离机制 -->
+    <div class="section" id="isolation">
+      <div class="section-label">§ 10 · Isolation</div>
+      <h2>物理隔离机制详解</h2>
+      <p>CLADA 的隔离分两个独立防御层，针对不同的安全目标，适用对象不同。</p>
+
+      <table>
+        <tr><th>防御层</th><th>适用对象</th><th>防御目标</th><th>实现方式</th></tr>
+        <tr>
+          <td><strong>宿主机文件代理</strong></td>
+          <td>Executor</td>
+          <td>逻辑泄密（读取 secrets、修改 docs）</td>
+          <td>Gateway 通过 LD_PRELOAD 或 ptrace 拦截文件系统调用，返回 EACCES</td>
+        </tr>
+        <tr>
+          <td><strong>Docker 容器隔离</strong></td>
+          <td>Verifier（测试运行时）</td>
+          <td>执行风险（破坏性测试代码）</td>
+          <td>Docker DIND + iptables 白名单网络 + 只读 Volume 挂载</td>
+        </tr>
+      </table>
+
+      <h3>AUDITING 阶段完整隔离流程</h3>
+      <div class="code-label">Gateway 执行序列</div>
+      <pre><code><span class="hl-dim"># 1. 进入 AUDITING 前锁定宿主机源码目录</span>
+chmod -R 555 ./src      <span class="hl-dim"># Read & Execute only，剥夺写权限</span>
+
+<span class="hl-dim"># 2. 启动 fswatch 守护（宿主机层面监控）</span>
+fswatch -r ./src | while read f; do
+  echo "[SECURITY] Unauthorized write attempt: $f"
+  kill -9 $EXECUTOR_PID   <span class="hl-dim"># 立即杀死违规进程</span>
+done &
+
+<span class="hl-dim"># 3. 拉起 Docker 容器（只读挂载源码）</span>
+docker run --rm \
+  -v $(pwd)/src:/app/src:ro \         <span class="hl-dim"># 只读挂载</span>
+  -v $(pwd)/test_results:/results \   <span class="hl-dim"># 可写输出目录</span>
+  --network=clada-test-net \           <span class="hl-dim"># 隔离网络（仅 LocalStack）</span>
+  clada-verifier:latest \
+  npm run test:all
+
+<span class="hl-dim"># 4. 测试完成后恢复权限</span>
+chmod -R 755 ./src
+docker rm -f clada-verifier-$(ITERATION_ID)</code></pre>
+
+      <div class="risk-box">
+        <strong>⚠ 技术风险：fswatch 与 Docker Volume</strong>
+        fswatch 监控宿主机 inode。容器内通过 Volume 映射的写操作是否能被宿主机 fswatch 捕获，取决于 Volume 挂载方式（bind mount vs overlay）。在 bind mount 模式下 inode 共享，fswatch 可捕获；在某些 overlay 配置下可能无法捕获。<strong>必须在目标环境实测验证</strong>。
+      </div>
+    </div>
+
+    <!-- SECTION 11: 技术风险 -->
+    <div class="section" id="risks">
+      <div class="section-label">§ 11 · Technical Risks</div>
+      <h2>技术风险清单</h2>
+
+      <table>
+        <tr><th>风险编号</th><th>风险描述</th><th>严重性</th><th>缓解策略</th><th>状态</th></tr>
+        <tr>
+          <td><code>RISK-01</code></td>
+          <td>SIGSTOP 挂起期间 Claude Code 与 Anthropic 服务器的 TCP 长连接超时（通常 60-120s）</td>
+          <td><span style="color:var(--warn)">高</span></td>
+          <td>Gateway 恢复前检查连接状态；断线则重新注入 current_spec.md 上下文片段；建议部署 Ollama 本地备选模型</td>
+          <td>⚠️ 待实测</td>
+        </tr>
+        <tr>
+          <td><code>RISK-02</code></td>
+          <td>fswatch 在特定 Docker Volume 挂载方式下无法捕获容器内写操作</td>
+          <td><span style="color:var(--accent3)">中</span></td>
+          <td>使用 bind mount 模式；或改用 inotifywait（Linux）替代；AUDITING 开始前的 chmod 555 作为主防线</td>
+          <td>⚠️ 待实测</td>
+        </tr>
+        <tr>
+          <td><code>RISK-03</code></td>
+          <td>Heartbeat 的 <code>#: heartbeat</code> 空注释被 Agent 当成用户消息触发不必要响应</td>
+          <td><span style="color:var(--accent3)">中</span></td>
+          <td>在 PTY 层拦截 Agent 回应该注释的输出，不转发给 Owner；或改用纯 PTY 控制序列（不经 Agent 解析）</td>
+          <td>⚠️ 待实测</td>
+        </tr>
+        <tr>
+          <td><code>RISK-04</code></td>
+          <td>LD_PRELOAD 文件访问代理在不同 OS / Agent 运行时（如容器化 Claude Code）下可能失效</td>
+          <td><span style="color:var(--accent3)">中</span></td>
+          <td>备选方案：使用 Linux namespace（mount ns）创建受限文件系统视图；macOS 上使用 sandbox-exec</td>
+          <td>⚠️ 设计备选</td>
+        </tr>
+        <tr>
+          <td><code>RISK-05</code></td>
+          <td>Bootstrap 双检锁生成的 contract.json 语义差异无法通过字段级 Key-Value 比对发现</td>
+          <td><span style="color:var(--accent)">低</span></td>
+          <td>Hard Fields 严格字符串比对已足够；Soft Fields 差异由 Owner 人工仲裁；Meta-Schema 强制字段存在性</td>
+          <td>✅ 已设计</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- SECTION 12: 实现路线图 -->
+    <div class="section" id="roadmap">
+      <div class="section-label">§ 12 · Implementation Roadmap</div>
+      <h2>实现路线图</h2>
+
+      <h3>Phase 1 · 核心骨架（优先级最高）</h3>
+      <table>
+        <tr><th>任务</th><th>交付物</th><th>关键验证点</th></tr>
+        <tr>
+          <td>PTY 封装与 SIGSTOP 兼容性测试</td>
+          <td><code>orchestrator.py</code> 基础版</td>
+          <td>Claude Code 在 SIGSTOP 60s 后恢复的上下文完整性</td>
+        </tr>
+        <tr>
+          <td>Pattern Monitor 线程</td>
+          <td>触发词正则引擎</td>
+          <td>[REQ_REVIEW] / [DONE] / [B_PLAN] 可靠识别</td>
+        </tr>
+        <tr>
+          <td>状态机骨架</td>
+          <td><code>current_state.json</code> 读写逻辑</td>
+          <td>八个状态的转移不出现死锁或漏转</td>
+        </tr>
+        <tr>
+          <td>contract.json Meta-Schema 验证器</td>
+          <td><code>contract_validator.py</code></td>
+          <td>Hard Fields 缺失时 Bootstrap 报错拒绝通过</td>
+        </tr>
+      </table>
+
+      <h3>Phase 2 · 隔离与记忆</h3>
+      <table>
+        <tr><th>任务</th><th>交付物</th><th>关键验证点</th></tr>
+        <tr>
+          <td>Docker 测试环境</td>
+          <td><code>Dockerfile.verifier</code> + <code>docker-compose.test.yml</code></td>
+          <td>LocalStack 模拟外部服务；破坏性测试不影响宿主机</td>
+        </tr>
+        <tr>
+          <td>chmod 互斥锁 + fswatch</td>
+          <td>AUDITING 阶段物理锁定逻辑</td>
+          <td>bind mount 场景下 fswatch 捕获率 100%</td>
+        </tr>
+        <tr>
+          <td>L2 index.json 维护</td>
+          <td><code>memory_manager.py</code></td>
+          <td>superseded DR 不出现在 Agent 上下文</td>
+        </tr>
+        <tr>
+          <td>Heartbeat 守护</td>
+          <td>30s 计时器 + 探针逻辑</td>
+          <td>探针不触发 Agent 业务逻辑响应</td>
+        </tr>
+      </table>
+
+      <h3>Phase 3 · 完整流水线</h3>
+      <table>
+        <tr><th>任务</th><th>交付物</th><th>关键验证点</th></tr>
+        <tr>
+          <td>Bootstrap 双检锁 UI</td>
+          <td><code>clada init</code> 命令</td>
+          <td>Hard Fields 差异必须 Owner 手动仲裁，无法跳过</td>
+        </tr>
+        <tr>
+          <td>L3 向量库集成</td>
+          <td>RAG 管道 + Summarizer 接入</td>
+          <td>双重检索 + superseded 过滤正确工作</td>
+        </tr>
+        <tr>
+          <td>Clean Shutdown 协议</td>
+          <td>异常终止善后逻辑</td>
+          <td>中断后 git stash 完整，下次可选择恢复</td>
+        </tr>
+        <tr>
+          <td>Owner 控制台 UI</td>
+          <td>实时 TRACE 面板 + 断点设置</td>
+          <td>$1 费用限制 / 5文件修改限制 可靠触发</td>
+        </tr>
+      </table>
+
+      <div class="completeness">
+        <div class="completeness-title">方案完整度评估</div>
+        <div class="progress-item">
+          <div class="progress-label"><span>三权分立架构设计</span><span>100%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>状态机定义</span><span>100%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>文档规范（Contract + DR）</span><span>100%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>通讯协议（Injection / TRACE / B_PLAN）</span><span>100%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>隔离机制设计</span><span>95%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:95%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>技术风险覆盖</span><span>95%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:95%"></div></div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-label"><span>PTY 兼容性（待实测）</span><span>70%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div>
+        </div>
+        <div class="progress-item" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="progress-label"><span style="color:var(--heading);font-weight:500">总体完整度</span><span>95%</span></div>
+          <div class="progress-bar" style="height:6px"><div class="progress-fill" style="width:95%"></div></div>
+        </div>
+      </div>
+
+      <div class="note-box">
+        <strong>✅ 结论</strong>
+        CLADA 方案已达到可进入实现阶段的完整度。剩余 5% 集中在三个需要实测验证的技术前提（RISK-01/02/03），建议在 Phase 1 结束时专门安排一个"兼容性验证 Sprint"，以实测结果修正对应的设计细节，再进入 Phase 2。
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
