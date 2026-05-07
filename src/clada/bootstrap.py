@@ -61,13 +61,25 @@ def run_bootstrap(runtime, proxy):
 
     # ── Step 3: Generate contracts (dual-lock) ──────────
     _section("[3/6] Dual-Lock Contract Generation")
-    print("Generating contract from two independent model perspectives...")
+
+    # Show configured models from .clada/config.yml
+    try:
+        from clada.config import CLADAConfig
+        cfg = CLADAConfig.load()
+        model_a, model_b = cfg.get_bootstrap_pair()
+        model_a_label = f"{model_a.provider}/{model_a.model}"
+        model_b_label = f"{model_b.provider}/{model_b.model}"
+    except Exception:
+        model_a_label = "Model A"
+        model_b_label = "Model B"
+
+    print(f"Configured: {model_a_label} vs {model_b_label}")
     print("(In production: calls two different LLM APIs. In Bootstrap mode: guided manual entry.)\n")
 
-    print("─── Model A (Primary) ───")
+    print(f"─── {model_a_label} (Primary) ───")
     contract_a = _guided_contract_entry("A", goal, stack, modules)
 
-    print("\n─── Model B (Cross-check) ───")
+    print(f"\n─── {model_b_label} (Cross-check) ───")
     print("Enter the same contract from a different perspective (or copy A to fast-track).")
     use_same = input("Use identical contract for Model B? [y/N]: ").strip().lower()
     if use_same == "y":

@@ -11,5 +11,6 @@ from clada.contract_validator import (
     print_validation_report,
 )
 from clada.config import CLADAConfig, ProviderConfig, RoleConfig, create_default_config
+from clada.dsl import DSLCompiler, CompileResult, parse_file, parse_string, DSLRegistry
 
 __version__ = "1.0.0"

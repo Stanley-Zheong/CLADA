@@ -162,11 +162,11 @@ def cmd_dsl(args: list):
             print(f"  {d:20s} — {desc}")
 
     elif sub == "template":
+        from clada.dsl.registry import list_domains, DSLRegistry
         if len(args) < 2:
             print("Usage: clada dsl template <domain>")
             print(f"Available: {', '.join(list_domains())}")
             return
-        from clada.dsl.registry import DSLRegistry
         domain = DSLRegistry.get(args[1])
         if not domain:
             print(f"Unknown domain: {args[1]}")
