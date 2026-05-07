@@ -56,7 +56,7 @@ PATTERNS = {
 
 SLASH_COMMANDS = {
     "/init", "/propose", "/execute", "/merge", "/reject", "/abort",
-    "/status", "/help", "/quota", "/autopilot"
+    "/status", "/help", "/quota", "/autopilot", "/dsl",
 }
 
 console = Console() if HAS_RICH else None
@@ -899,6 +899,8 @@ class REPL:
                 self._cmd_quota(args)
             elif cmd == "/autopilot":
                 self._cmd_autopilot(args)
+            elif cmd == "/dsl":
+                self._cmd_dsl(args)
             else:
                 _log(f"Unknown command: {cmd}. Type /help for list.", "red")
 
@@ -913,6 +915,7 @@ class REPL:
   /status            Show current state
   /quota [n]         Set ask_verifier quota (default: 10)
   /autopilot [on|off] Toggle Owner-offline mode
+  /dsl compile <file> Compile .dsl file → contract.json + spec.md
 """
         print(help_text)
 
@@ -986,22 +989,36 @@ class REPL:
 
     def _build_claude_cmd(self, spec_content: str) -> list[str]:
         """
-        Build the claude CLI invocation. Spec is passed via --message flag.
-        Adjust flags based on actual claude CLI interface.
+        Build the executor CLI invocation from config.
+        Falls back to default `claude` CLI if no config found.
         """
-        # Write spec to a temp prompt file for claude to read
+        from clada.config import CLADAConfig
+
+        config = CLADAConfig.load()
+        role = config.get_executor()
+
         prompt_file = RUNTIME_DIR / "executor_prompt.md"
         RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        prompt_file.write_text(
-            f"You are the CLADA Executor. Your rules:\n"
-            f"1. Implement ONLY what is specified. No improvisation.\n"
-            f"2. Output [TRACE] after every 3 file modifications.\n"
-            f"3. Output [REQ_REVIEW] + q_waiting.json when spec is ambiguous.\n"
-            f"4. Output [DONE] when implementation is complete.\n"
-            f"5. If quota exhausted, mark decisions with [B_PLAN].\n\n"
+
+        system_prompt = (
+            "You are the CLADA Executor. Your rules:\n"
+            "1. Implement ONLY what is specified. No improvisation.\n"
+            "2. Output [TRACE] after every 3 file modifications.\n"
+            "3. Output [REQ_REVIEW] + q_waiting.json when spec is ambiguous.\n"
+            "4. Output [DONE] when implementation is complete.\n"
+            "5. If quota exhausted, mark decisions with [B_PLAN].\n\n"
             f"--- CURRENT SPEC ---\n{spec_content}\n"
         )
-        return ["claude", "--dangerously-skip-permissions", str(prompt_file)]
+        prompt_file.write_text(system_prompt)
+
+        cli_path = role.cli_path or "claude"
+
+        if role.mode == "api":
+            _log(f"[CONFIG] Executor: {role.provider}/{role.model} (API mode)", "dim")
+        else:
+            _log(f"[CONFIG] Executor: {role.provider}/{role.model} via {cli_path}", "dim")
+
+        return [cli_path, "--dangerously-skip-permissions", str(prompt_file)]
 
     def _passthrough_loop(self, executor: PTYProcess):
         """Forward Owner keyboard input to executor PTY."""
@@ -1084,6 +1101,45 @@ class REPL:
         self.runtime.save()
         status = "ON" if self.runtime.autopilot else "OFF"
         _log(f"[AUTOPILOT] {status}", "yellow" if self.runtime.autopilot else "dim")
+
+    def _cmd_dsl(self, args: str):
+        from clada.dsl.compiler import DSLCompiler
+        from clada.dsl.registry import list_domains, DSLRegistry
+
+        parts = args.split()
+        sub = parts[0] if parts else ""
+
+        if sub == "compile" and len(parts) > 1:
+            dsl_path = Path(parts[1])
+            if not dsl_path.exists():
+                _log(f"[DSL] File not found: {dsl_path}", "red")
+                return
+            compiler = DSLCompiler()
+            result = compiler.compile_file(dsl_path)
+            if result.success:
+                contract_path, spec_path = result.write_to(SPEC_DIR, DECISIONS_DIR)
+                _log(f"[DSL] ✅ Compiled ({result.domain}): contract.json + spec.md", "green")
+                for w in result.warnings:
+                    _log(f"[DSL] ⚠️  {w}", "yellow")
+            else:
+                for e in result.errors:
+                    _log(f"[DSL] ❌ {e}", "red")
+        elif sub == "domains":
+            for d in list_domains():
+                info = DSLRegistry.get(d)
+                desc = info.get("description", "") if info else ""
+                _log(f"[DSL] {d:20s} — {desc}", "dim")
+        elif sub == "template" and len(parts) > 1:
+            domain = DSLRegistry.get(parts[1])
+            if domain:
+                for phase, info in domain.get("phases", {}).items():
+                    print(f"\n;; Phase: {phase}")
+                    print(info.get("template", "").strip())
+                    print()
+            else:
+                _log(f"[DSL] Unknown domain: {parts[1]}", "red")
+        else:
+            _log("[DSL] Usage: /dsl compile <file>|domains|template <domain>", "yellow")
 
     def _archive_iteration(self, it: str):
         """Archive iteration snapshot to docs/iterations/."""

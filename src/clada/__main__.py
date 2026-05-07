@@ -13,15 +13,19 @@ CLADA — Closed-Loop Autonomous Development Architecture
 Phase 1: PTY + State Machine + Validator
 
 USAGE:
-  python3 -m clada                    Start interactive Gateway (main mode)
-  python3 -m clada init               Run Bootstrap (create project constitution)
-  python3 -m clada status             Show current system state
-  python3 -m clada validate contract  Validate docs/spec/contract.json
-  python3 -m clada validate dr <file> Validate a DR-xxx.md file
-  python3 -m clada validate all       Validate all DRs in docs/decisions/
-  python3 -m clada index rebuild      Rebuild L2 index.json
-  python3 -m clada cold-start         Scan repo and generate architecture.md
-  python3 -m clada help               Show this help
+  python3 -m clada                       Start interactive Gateway (main mode)
+  python3 -m clada init                  Run Bootstrap (create project constitution)
+  python3 -m clada status                Show current system state
+  python3 -m clada validate contract     Validate docs/spec/contract.json
+  python3 -m clada validate dr <file>    Validate a DR-xxx.md file
+  python3 -m clada validate all          Validate all DRs in docs/decisions/
+  python3 -m clada index rebuild         Rebuild L2 index.json
+  python3 -m clada cold-start            Scan repo and generate architecture.md
+  python3 -m clada dsl compile <file>    Compile .dsl → contract.json + spec.md
+  python3 -m clada dsl domains           List available DSL domains
+  python3 -m clada dsl template <domain> Output DSL template for a domain
+  python3 -m clada config init           Create default .clada/config.yml
+  python3 -m clada help                  Show this help
 
 QUICK START:
   1. python3 -m clada init            # Bootstrap: define Goal + Contract
@@ -114,6 +118,80 @@ def cmd_index_rebuild():
           f"{sum(1 for d in index['decisions'] if d.get('status') != 'superseded')} active")
 
 
+def cmd_dsl(args: list):
+    if not args:
+        print("Usage: clada dsl [compile <file>|domains|template <domain>]")
+        return
+
+    sub = args[0]
+
+    if sub == "compile":
+        if len(args) < 2:
+            print("Usage: clada dsl compile <path/to/project.dsl>")
+            sys.exit(1)
+        from clada.dsl.compiler import DSLCompiler
+        dsl_path = Path(args[1])
+        if not dsl_path.exists():
+            print(f"DSL file not found: {dsl_path}")
+            sys.exit(1)
+        compiler = DSLCompiler()
+        result = compiler.compile_file(dsl_path)
+        if result.success:
+            contract_path, spec_path = result.write_to(
+                Path("docs/spec"), Path("docs/decisions")
+            )
+            print(f"✅ Compiled ({result.domain}):")
+            print(f"   contract.json → {contract_path}")
+            print(f"   spec.md       → {spec_path}")
+            for w in result.warnings:
+                print(f"   ⚠️  {w}")
+        else:
+            print("❌ Compilation failed:")
+            for e in result.errors:
+                print(f"   {e}")
+            sys.exit(1)
+
+    elif sub == "domains":
+        from clada.dsl.registry import list_domains
+        domains = list_domains()
+        print("Available DSL domains:")
+        for d in domains:
+            from clada.dsl.registry import DSLRegistry
+            info = DSLRegistry.get(d)
+            desc = info.get("description", "") if info else ""
+            print(f"  {d:20s} — {desc}")
+
+    elif sub == "template":
+        if len(args) < 2:
+            print("Usage: clada dsl template <domain>")
+            print(f"Available: {', '.join(list_domains())}")
+            return
+        from clada.dsl.registry import DSLRegistry
+        domain = DSLRegistry.get(args[1])
+        if not domain:
+            print(f"Unknown domain: {args[1]}")
+            print(f"Available: {', '.join(list_domains())}")
+            sys.exit(1)
+        for phase, info in domain.get("phases", {}).items():
+            print(f";; Phase: {phase} — {info.get('description', '')}")
+            print(info.get("template", "").strip())
+            print()
+
+    else:
+        print(f"Unknown dsl subcommand: {sub}")
+        print("Usage: clada dsl [compile <file>|domains|template <domain>]")
+
+
+def cmd_config(args: list):
+    sub = args[0] if args else "init"
+    if sub == "init":
+        from clada.config import create_default_config
+        path = create_default_config()
+        print(f"✅ Created default config: {path}")
+    else:
+        print(f"Unknown config subcommand: {sub}")
+
+
 def main():
     args = sys.argv[1:]
 
@@ -150,6 +228,12 @@ def main():
         from clada.bootstrap import MemoryManager
         mm = MemoryManager()
         mm.scan_repo_for_architecture()
+
+    elif cmd == "dsl":
+        cmd_dsl(args[1:])
+
+    elif cmd == "config":
+        cmd_config(args[1:])
 
     else:
         print(f"Unknown command: {cmd}")

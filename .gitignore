@@ -25,7 +25,8 @@ Thumbs.db
 
 # CLADA runtime directories
 runtime/
-.clada/
+.clada/*
+!.clada/config.yml
 .comm/
 
 # Secrets

@@ -10,5 +10,6 @@ from clada.contract_validator import (
     DRValidator, L2IndexBuilder,
     print_validation_report,
 )
+from clada.config import CLADAConfig, ProviderConfig, RoleConfig, create_default_config
 
 __version__ = "1.0.0"
