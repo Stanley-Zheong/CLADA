@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clada"
+version = "1.0.0"
+description = "Closed-Loop Autonomous Development Architecture — a governance framework that wraps AI coding agents in a verifiable development pipeline."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "CLADA" }]
+keywords = ["ai", "agents", "governance", "state-machine", "claude-code"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+]
+
+# Runtime dependencies. Kept in lock-step with requirements.txt — the two
+# files must not contradict each other.
+dependencies = [
+    "rich>=13.0",
+    "psutil>=5.9",
+    "jsonschema>=4.17",
+    "pexpect>=4.8",
+    "watchdog>=3.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+clada = "clada.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/Stanley-Zheong/CLADA"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

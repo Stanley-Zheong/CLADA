@@ -93,33 +93,64 @@ CLADA/
 ├── src/
 │   └── clada/                 # Python package
 │       ├── __init__.py        # Package exports
-│       ├── __main__.py        # CLI entry point (python -m clada)
+│       ├── __main__.py        # CLI entry point (python -m clada / clada)
 │       ├── orchestrator.py    # State machine + PTY manager + Gateway REPL
 │       ├── bootstrap.py       # Bootstrap flow + Memory Manager
-│       └── contract_validator.py  # Contract/DR validation + L2 index
+│       ├── contract_validator.py  # Contract/DR validation + L2 index
+│       ├── config.py          # LLM role configuration (.clada/config.yml)
+│       └── dsl/               # S-expression DSL → contract.json + spec.md
+├── tests/                     # Baseline pytest suite (state machine, validators, DSL)
 ├── docs/
 │   └── CLADA_Complete_Spec.html  # Full technical specification
-├── requirements.txt
+├── pyproject.toml             # Packaging + console script (clada)
+├── requirements.txt           # Flat dependency mirror of pyproject.toml
 ├── .gitignore
 └── README.md
 ```
 
 ## Quick Start
 
-### Prerequisites (macOS)
+### Install (macOS / Linux, Python ≥ 3.9)
 
 ```bash
-pip install rich psutil jsonschema pexpect watchdog
-brew install fswatch              # optional, for file write monitoring
-npm install -g @anthropic-ai/claude-code  # Executor agent
+git clone https://github.com/Stanley-Zheong/CLADA.git
+cd CLADA
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .                  # installs CLADA + dependencies, adds the `clada` command
+clada help                        # verify the install
+```
+
+Optional extras:
+
+```bash
+pip install -e ".[test]"          # also install pytest for the test suite
+brew install fswatch              # optional, for file write monitoring (best-effort)
+npm install -g @anthropic-ai/claude-code  # Executor agent (required only to run a live Gateway)
+```
+
+> `pip install -e .` reads `pyproject.toml`; `requirements.txt` mirrors the same
+> dependency set for environments that prefer `pip install -r requirements.txt`.
+
+### Running the Tests
+
+```bash
+pip install -e ".[test]"
+pytest                            # runs the baseline suite under tests/
+```
+
+### First Run
+
+```bash
+clada help                        # list all commands
+clada dsl domains                 # list built-in DSL domains (no project needed)
 ```
 
 ### Bootstrap a New Project
 
 ```bash
 cd your-project
-python3 -m clada init             # Bootstrap: define Goal + Contract
-python3 -m clada                  # Start Gateway
+clada init                        # Bootstrap: define Goal + Contract  (alias: python3 -m clada init)
+clada                             # Start Gateway                       (alias: python3 -m clada)
 ```
 
 ### Gateway Commands
@@ -138,14 +169,26 @@ clada> /autopilot [on|off] Toggle Owner-offline mode
 
 ### CLI Commands
 
+After `pip install -e .` these are available both as `clada <cmd>` and `python3 -m clada <cmd>`.
+
 ```bash
-python3 -m clada status             # Show system state
-python3 -m clada validate contract  # Validate docs/spec/contract.json
-python3 -m clada validate dr <file> # Validate a DR-xxx.md file
-python3 -m clada validate all       # Validate all DRs
-python3 -m clada index rebuild      # Rebuild L2 index.json
-python3 -m clada cold-start         # Scan repo → architecture.md
+clada status              # Show system state
+clada validate contract   # Validate docs/spec/contract.json
+clada validate dr <file>  # Validate a DR-xxx.md file
+clada validate all        # Validate all DRs
+clada index rebuild       # Rebuild L2 index.json
+clada cold-start          # Scan repo → architecture.md
+clada dsl domains         # List available DSL domains
+clada dsl compile <file>  # Compile a .dsl file → contract.json + spec.md
+clada dsl template <dom>  # Print a DSL template for a domain
+clada config init         # Create a default .clada/config.yml
 ```
+
+> **Maturity note (Phase 1).** Installable packaging, the state machine, the
+> contract/DR validators, and the DSL compiler are implemented and covered by
+> the `tests/` suite. The live Gateway loop (`clada` with no args), PTY
+> suspension, `fswatch` monitoring, and `clada run` are best-effort or planned —
+> see the Implementation Phases and Technical Risk Register below.
 
 ## Implementation Phases
 
