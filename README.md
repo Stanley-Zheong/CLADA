@@ -2,7 +2,9 @@
 
 **C**losed-**L**oop **A**utonomous **D**evelopment **A**rchitecture
 
-A governance framework that wraps AI coding agents (like Claude Code) in a verifiable development pipeline — giving the human Owner control through a machine-readable constitution, a formal state machine, and physical isolation.
+A governance framework that wraps AI coding agents (like Claude Code) in a verifiable development pipeline — giving the human Owner control through a machine-readable constitution, a formal state machine, and (planned) physical isolation of the agent process.
+
+> **Status at a glance.** The machine-readable constitution, the state machine, the contract/DR validators, and the DSL compiler are **implemented and tested** today. Physical isolation (process suspension, read-only locking, file-write monitoring) is **best-effort or planned** — see the [Maturity note](#cli-commands) and the Implementation Phases table below. README claims describe the target design, not all currently-shipping behavior.
 
 ## Design Philosophy
 
@@ -79,12 +81,17 @@ IDLE ──/init──▶ BOOTSTRAP ──confirm──▶ IDLE
 
 ## Key Features
 
-- **Dual-Lock Contract Generation**: Two independent AI models generate project constitutions; Gateway performs field-level diff; Owner only arbitrates conflicts
-- **Physical Isolation**: `SIGSTOP`/`SIGCONT` for Executor suspension; `chmod 555` read-only locking during audit
-- **Pattern Monitor**: Regex-triggered state transitions (`[REQ_REVIEW]`, `[DONE]`, `[B_PLAN]`, `[TRACE]`)
-- **Three-Tier Memory**: L1 (immediate), L2 (structural DR index), L3 (historical archives) — designed to combat hallucination beyond 100 iterations
-- **Clean Shutdown Protocol**: Git stash + recovery prompt on quota exhaustion or abnormal termination
-- **ADR-Based Decision Records**: Every architectural decision tracked as machine-readable frontmatter with formal validation
+The list below describes the **target design**. The Status column marks what ships
+today versus what is best-effort or planned (see Implementation Phases for detail).
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **ADR-Based Decision Records** | Every architectural decision tracked as machine-readable frontmatter with formal validation | Implemented |
+| **Three-Tier Memory** | L1 (immediate), L2 (structural DR index), L3 (historical archives) — designed to combat hallucination beyond 100 iterations | L2 index implemented; L3 planned |
+| **Pattern Monitor** | Regex-triggered state transitions (`[REQ_REVIEW]`, `[DONE]`, `[B_PLAN]`, `[TRACE]`) | Best-effort (needs a live Gateway) |
+| **Physical Isolation** | `SIGSTOP`/`SIGCONT` for Executor suspension; `chmod 555` read-only locking during audit | Planned (Phase 2) — not yet enforced |
+| **Dual-Lock Contract Generation** | Two independent AI models generate project constitutions; Gateway performs field-level diff; Owner only arbitrates conflicts | Planned (Phase 3) |
+| **Clean Shutdown Protocol** | Git stash + recovery prompt on quota exhaustion or abnormal termination | Planned (Phase 3) |
 
 ## Project Structure
 
@@ -123,8 +130,8 @@ clada help                        # verify the install
 Optional extras:
 
 ```bash
-pip install -e ".[test]"          # also install pytest for the test suite
-brew install fswatch              # optional, for file write monitoring (best-effort)
+pip install -e ".[test]"          # alias for the base install — pytest is already included
+brew install fswatch              # optional, for file write monitoring (best-effort / planned)
 npm install -g @anthropic-ai/claude-code  # Executor agent (required only to run a live Gateway)
 ```
 
@@ -133,8 +140,10 @@ npm install -g @anthropic-ai/claude-code  # Executor agent (required only to run
 
 ### Running the Tests
 
+`pytest` is part of the base install, so the baseline suite runs immediately
+after `pip install -e .`:
+
 ```bash
-pip install -e ".[test]"
 pytest                            # runs the baseline suite under tests/
 ```
 

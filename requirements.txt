@@ -7,3 +7,4 @@ jsonschema>=4.17
 pexpect>=4.8
 watchdog>=3.0
 PyYAML>=6.0
+pytest>=7.0

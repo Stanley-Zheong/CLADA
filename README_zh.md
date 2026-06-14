@@ -2,7 +2,9 @@
 
 **C**losed-**L**oop **A**utonomous **D**evelopment **A**rchitecture（闭环自主开发架构）
 
-一个将 AI 编程智能体（如 Claude Code）置于可验证开发流水线中的治理框架 — 通过机器可读宪法、形式化状态机和物理隔离，让人始终掌控全局。
+一个将 AI 编程智能体（如 Claude Code）置于可验证开发流水线中的治理框架 — 通过机器可读宪法、形式化状态机以及（计划中的）智能体进程物理隔离，让人始终掌控全局。
+
+> **当前状态速览。** 机器可读宪法、状态机、Contract/DR 验证器、DSL 编译器**目前均已实现并有测试覆盖**；物理隔离（进程挂起、只读锁、文件写入监控）仍为 **best-effort 或计划中** —— 详见下方的[成熟度说明](#cli-命令)与实现路线图。本 README 描述的是目标设计，并非全部均为当前已上线行为。
 
 ## 设计哲学
 
@@ -79,12 +81,16 @@ IDLE ──/init──▶ BOOTSTRAP ──确认──▶ IDLE
 
 ## 核心特性
 
-- **双检锁 Contract 生成**：两个独立 AI 模型分别生成项目宪法；Gateway 逐字段比对；Owner 仅仲裁冲突点。杜绝单一模型偏见写入宪法。
-- **物理隔离**：`SIGSTOP`/`SIGCONT` 挂起执行者；审计期间 `chmod 555` 将源码目录设为只读。
-- **模式监听器**：基于正则触发的状态转移（`[REQ_REVIEW]`、`[DONE]`、`[B_PLAN]`、`[TRACE]`）。
-- **三级记忆系统**：L1（即时上下文）、L2（结构化决策索引）、L3（历史存档）— 针对 100+ 轮迭代后的幻觉问题设计。
-- **Clean Shutdown 协议**：Quota 耗尽或异常终止时自动 git stash + 恢复选择提示。
-- **ADR 决策记录**：每一项架构决策以机器可读的 front-matter 格式记录，并经过形式化验证。
+下表描述的是**目标设计**，“状态”列标明哪些已上线、哪些为 best-effort 或计划中（详见实现路线图）。
+
+| 特性 | 说明 | 状态 |
+|------|------|------|
+| **ADR 决策记录** | 每一项架构决策以机器可读的 front-matter 格式记录，并经过形式化验证 | 已实现 |
+| **三级记忆系统** | L1（即时上下文）、L2（结构化决策索引）、L3（历史存档）— 针对 100+ 轮迭代后的幻觉问题设计 | L2 索引已实现；L3 计划中 |
+| **模式监听器** | 基于正则触发的状态转移（`[REQ_REVIEW]`、`[DONE]`、`[B_PLAN]`、`[TRACE]`） | best-effort（需实时 Gateway） |
+| **物理隔离** | `SIGSTOP`/`SIGCONT` 挂起执行者；审计期间 `chmod 555` 将源码目录设为只读 | 计划中（Phase 2）—— 尚未强制启用 |
+| **双检锁 Contract 生成** | 两个独立 AI 模型分别生成项目宪法；Gateway 逐字段比对；Owner 仅仲裁冲突点 | 计划中（Phase 3） |
+| **Clean Shutdown 协议** | Quota 耗尽或异常终止时自动 git stash + 恢复选择提示 | 计划中（Phase 3） |
 
 ## 项目结构
 
@@ -123,8 +129,8 @@ clada help                        # 验证安装
 可选附加项：
 
 ```bash
-pip install -e ".[test]"          # 额外安装 pytest 以运行测试套件
-brew install fswatch              # 可选，用于文件写入监控（best-effort）
+pip install -e ".[test]"          # 基础安装的别名 —— pytest 已包含在基础依赖中
+brew install fswatch              # 可选，用于文件写入监控（best-effort / 计划中）
 npm install -g @anthropic-ai/claude-code  # Executor 智能体（仅运行实时 Gateway 时需要）
 ```
 
@@ -133,8 +139,9 @@ npm install -g @anthropic-ai/claude-code  # Executor 智能体（仅运行实时
 
 ### 运行测试
 
+`pytest` 已包含在基础依赖中，因此执行 `pip install -e .` 后即可直接运行基线测试：
+
 ```bash
-pip install -e ".[test]"
 pytest                            # 运行 tests/ 下的基线测试
 ```
 
