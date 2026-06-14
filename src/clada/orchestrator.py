@@ -12,6 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Callable
 
+from clada.checkpoint import SessionCheckpoint
 from clada.policy import (
     PathPolicy,
     EnforcementStatus,
@@ -672,6 +673,13 @@ class FileAccessProxy:
     def stop_fswatch(self):
         if self._watcher_proc:
             self._watcher_proc.terminate()
+            try:
+                self._watcher_proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self._watcher_proc.kill()
+                self._watcher_proc.wait(timeout=1)
+            finally:
+                self._watcher_proc = None
 
 
 # ─────────────────────────────────────────────
@@ -688,18 +696,14 @@ def clean_shutdown(runtime: RuntimeState, reason: str = "Quota exhausted"):
 
     iteration_id = runtime.iteration_id
 
-    # 1. Git snapshot
+    # 1. Session-scoped recovery metadata.
+    #
+    # Older CLADA builds ran `git add -A` and committed the entire working
+    # tree here. That was unsafe because owner work that predated the session
+    # could be staged or committed without consent. Phase 4 fences shutdown to
+    # metadata plus explicit, path-scoped recovery guidance.
     branch = f"clada/interrupted/{iteration_id}"
-    cmds = [
-        ["git", "add", "-A"],
-        ["git", "commit", "-m",
-         f"[CLADA_INTERRUPTED]: {reason} at {iteration_id}", "--no-verify"],
-        ["git", "checkout", "-b", branch],
-    ]
-    for cmd in cmds:
-        r = subprocess.run(cmd, capture_output=True, cwd=str(CLADA_ROOT))
-        if r.returncode != 0 and b"nothing to commit" not in r.stderr:
-            _log(f"[SHUTDOWN] git cmd failed: {' '.join(cmd)}: {r.stderr.decode()[:100]}", "red")
+    checkpoint = SessionCheckpoint.capture(CLADA_ROOT).diff()
 
     # 2. Save interrupted state
     last_trace = ""
@@ -721,13 +725,17 @@ def clean_shutdown(runtime: RuntimeState, reason: str = "Quota exhausted"):
         "last_trace":      last_trace,
         "pending_question": pending_q,
         "branch":          branch,
+        "session_owned_paths": checkpoint.session_owned_paths,
+        "pre_existing_dirty_paths": checkpoint.pre_existing_dirty_paths,
+        "rollback_commands": checkpoint.rollback_commands(),
     }, indent=2, ensure_ascii=False))
 
     _log(f"[SHUTDOWN] State saved → {INTERRUPTED_FILE}", "green")
 
     # 3. Owner prompt
     print(f"\n{'─'*60}")
-    print(f"任务在 {iteration_id} 中断。代码已快照至分支: {branch}")
+    print(f"任务在 {iteration_id} 中断。未自动暂存或提交工作区。")
+    print(f"建议恢复分支名: {branch}")
     print(f"{'─'*60}")
     print("请选择恢复策略:")
     print("  [A] 补充 Quota 继续执行")
@@ -741,9 +749,7 @@ def clean_shutdown(runtime: RuntimeState, reason: str = "Quota exhausted"):
         _log(f"[SHUTDOWN] Quota 已补充至 {QUOTA_DEFAULT}", "green")
         return "continue"
     elif choice == "B":
-        subprocess.run(["git", "checkout", "main"], cwd=str(CLADA_ROOT))
-        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=str(CLADA_ROOT))
-        _log("[SHUTDOWN] 已回滚至 main", "yellow")
+        _log("[SHUTDOWN] 未执行自动 git reset；请按 interrupted_state.json 的路径级命令回滚", "yellow")
         runtime.transition(State.IDLE)
         return "rollback"
     else:

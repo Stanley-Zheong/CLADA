@@ -168,3 +168,30 @@ def test_run_redacts_secret_like_command_and_output_in_jsonl(tmp_path):
     assert command_events and output_events
     assert secret not in json.dumps(command_events, ensure_ascii=False)
     assert secret not in json.dumps(output_events, ensure_ascii=False)
+
+
+def test_run_generates_audit_report_with_checkpoint(tmp_path):
+    """AUD-01/AUD-04: every supervised session writes a report with rollback."""
+    sessions_dir = tmp_path / "sessions"
+    audits_dir = tmp_path / "audits"
+    sup = SessionSupervisor(
+        ["echo", "ok"],
+        sessions_dir=sessions_dir,
+        audits_dir=audits_dir,
+        project_root=tmp_path,
+        echo=False,
+        enforce_policy=False,
+    )
+    exit_code = sup.run()
+
+    assert exit_code == 0
+    report = audits_dir / f"{sup.session_id}.md"
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
+    assert f"CLADA Session Audit: {sup.session_id}" in text
+    assert "Rollback Instructions" in text
+
+    events = _read_events(sup.log_path)
+    kinds = [e["event"] for e in events]
+    assert "checkpoint" in kinds
+    assert kinds[-1] == "session_end"
