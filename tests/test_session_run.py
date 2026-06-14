@@ -54,7 +54,7 @@ def test_run_echo_ok_smoke(tmp_path):
     assert kinds[0] == "session_start"
     assert "command" in kinds
     assert "process_start" in kinds
-    assert "output" in kinds
+    assert "process_output" in kinds
     assert "process_exit" in kinds
     assert kinds[-1] == "session_end"
 
@@ -64,7 +64,7 @@ def test_run_echo_ok_smoke(tmp_path):
         assert "ts" in e
 
     # The child's stdout actually made it into the log.
-    output = "".join(e["data"] for e in events if e["event"] == "output")
+    output = "".join(e["data"] for e in events if e["event"] == "process_output")
     assert "ok" in output
 
     # session_end records success, exit status and a numeric duration.

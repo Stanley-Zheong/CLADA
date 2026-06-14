@@ -14,7 +14,7 @@ Design notes
 * JSONL contract: one JSON object per line. Every record carries ``ts``,
   ``session_id`` and ``event``; event-specific fields follow.
 * PTY limitation: a pseudo-terminal merges the child's stderr into the same
-  stream as stdout, so ``output`` events are tagged ``stream="stdout"``. True
+  stream as stdout, so ``process_output`` events are tagged ``stream="stdout"``. True
   stream separation would require pipe-based capture and is out of scope for
   the Phase 2 smoke path.
 * Sensitive data: this wrapper never reads or logs file contents, the
@@ -205,7 +205,7 @@ class SessionSupervisor:
 
     def _write_output(self, chunk: str):
         # PTY merges stderr into stdout; tag the unified stream accordingly.
-        self._emit("output", stream="stdout", data=chunk)
+        self._emit("process_output", stream="stdout", data=chunk)
         if self.echo:
             sys.stdout.write(chunk)
             sys.stdout.flush()
