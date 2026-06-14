@@ -32,8 +32,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from clada.orchestrator import CLADA_ROOT, PTYProcess, RuntimeState
-from clada.policy import EnforcementStatus, EventSink, redact_path
+from clada.orchestrator import CLADA_ROOT, FileAccessProxy, PTYProcess, RuntimeState
+from clada.policy import (
+    EnforcementStatus,
+    EventSink,
+    evaluate_enforcement,
+    redact_path,
+)
 
 # Session logs live next to the rest of the runtime state.
 DEFAULT_SESSIONS_DIR = CLADA_ROOT / "runtime" / "sessions"
@@ -43,6 +48,9 @@ DEFAULT_SESSIONS_DIR = CLADA_ROOT / "runtime" / "sessions"
 EXIT_COMMAND_NOT_FOUND = 127
 # Exit code for a usage error (no command supplied).
 EXIT_USAGE = 2
+# Exit code used when CLADA refuses to launch a child because policy
+# enforcement is degraded and no explicit owner approval was provided.
+EXIT_POLICY_BLOCKED = 78
 
 
 def _clada_version() -> str:
@@ -89,6 +97,7 @@ class SessionSupervisor:
         sessions_dir: Optional[Path] = None,
         session_id: Optional[str] = None,
         echo: bool = True,
+        enforce_policy: bool = True,
     ):
         self.command = list(command or [])
         self.runtime = runtime
@@ -97,10 +106,12 @@ class SessionSupervisor:
         # When True, child terminal output is mirrored to our stdout so the
         # user sees the agent live; tests disable this to stay quiet.
         self.echo = echo
+        self.enforce_policy = enforce_policy
 
         self._log_fh = None
         self._start_monotonic: Optional[float] = None
         self._proc: Optional[PTYProcess] = None
+        self._policy_proxy: Optional[FileAccessProxy] = None
 
     # ── log path ────────────────────────────────────────────────────
     @property
@@ -184,6 +195,49 @@ class SessionSupervisor:
                 return None
         return f"Command not found: {exe}"
 
+    # ── policy gate ──────────────────────────────────────────────────
+    def _prepare_policy_gate(self) -> bool:
+        """Apply and record the non-interactive ``clada run`` policy gate.
+
+        ``clada run`` has no live Owner prompt, so degraded enforcement fails
+        closed by default. This mirrors the interactive REPL gate without
+        silently launching an agent while chmod/fswatch protection is absent.
+        """
+        if not self.enforce_policy:
+            return True
+
+        proxy = FileAccessProxy(
+            CLADA_ROOT,
+            self.runtime,
+            event_sink=self.policy_event_sink(),
+        )
+        self._policy_proxy = proxy
+
+        harden_status = proxy.harden_protected_paths()
+        gate = proxy.assess_enforcement(harden_status)
+        self.emit_policy_status(gate)
+
+        decision = evaluate_enforcement(
+            gate,
+            owner_approved=False,
+            fail_closed=True,
+        )
+        if decision.allowed:
+            return True
+
+        self._emit(
+            "policy_blocked",
+            reason=decision.reason,
+            requires_owner_approval=decision.requires_owner_approval,
+        )
+        print(
+            f"Policy enforcement degraded; refusing to launch: {decision.reason}",
+            file=sys.stderr,
+        )
+        for reason in gate.degraded_reasons:
+            print(f"  - {reason}", file=sys.stderr)
+        return False
+
     # ── child process loop ──────────────────────────────────────────
     def _run_process(self) -> int:
         proc = PTYProcess(self.command, self.session_id, self.runtime)
@@ -199,6 +253,10 @@ class SessionSupervisor:
         assert pid is not None  # start() returned True, so the fork succeeded
         # process change: started
         self._emit("process_start", pid=pid)
+        if self._policy_proxy is not None:
+            monitor_status = self._policy_proxy.start_fswatch(pid)
+            if monitor_status.degraded:
+                self.emit_policy_status(monitor_status)
 
         exit_code = 0
         try:
@@ -274,6 +332,15 @@ class SessionSupervisor:
                 )
                 return exit_code
 
+            if not self._prepare_policy_gate():
+                self._emit(
+                    "session_end",
+                    exit_status=EXIT_POLICY_BLOCKED,
+                    duration_seconds=self._elapsed(),
+                    ok=False,
+                )
+                return EXIT_POLICY_BLOCKED
+
             exit_code = self._run_process()
             self._emit(
                 "session_end",
@@ -292,6 +359,12 @@ class SessionSupervisor:
             )
             return 1
         finally:
+            if self._policy_proxy is not None:
+                try:
+                    self._policy_proxy.stop_fswatch()
+                    self._policy_proxy.restore_protected_paths()
+                except Exception as e:  # pragma: no cover - defensive
+                    self._emit("error", message=f"Policy cleanup failed: {e}")
             self._close_log()
 
 
@@ -300,9 +373,14 @@ def run_session(
     runtime: Optional[RuntimeState] = None,
     sessions_dir: Optional[Path] = None,
     echo: bool = True,
+    enforce_policy: bool = True,
 ) -> int:
     """Convenience wrapper: build a supervisor and run one session."""
     supervisor = SessionSupervisor(
-        command, runtime=runtime, sessions_dir=sessions_dir, echo=echo
+        command,
+        runtime=runtime,
+        sessions_dir=sessions_dir,
+        echo=echo,
+        enforce_policy=enforce_policy,
     )
     return supervisor.run()

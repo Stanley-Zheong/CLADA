@@ -288,7 +288,9 @@ def test_redact_path():
 def test_session_emits_policy_events(tmp_path):
     from clada.session import SessionSupervisor
 
-    sup = SessionSupervisor(["echo", "ok"], sessions_dir=tmp_path, echo=False)
+    sup = SessionSupervisor(
+        ["echo", "ok"], sessions_dir=tmp_path, echo=False, enforce_policy=False
+    )
     sup._open_log()
     try:
         status = EnforcementStatus(chmod_attempted=True, hardened_paths=["runtime"])
@@ -317,7 +319,9 @@ def test_session_policy_event_sink_roundtrips(tmp_path):
     """A FileAccessProxy can emit straight into a session's JSONL log."""
     from clada.session import SessionSupervisor
 
-    sup = SessionSupervisor(["echo", "ok"], sessions_dir=tmp_path, echo=False)
+    sup = SessionSupervisor(
+        ["echo", "ok"], sessions_dir=tmp_path, echo=False, enforce_policy=False
+    )
     sup._open_log()
     try:
         proxy = FileAccessProxy(tmp_path, runtime=None, event_sink=sup.policy_event_sink())
@@ -331,3 +335,37 @@ def test_session_policy_event_sink_roundtrips(tmp_path):
         if ln.strip()
     ]
     assert any(e["event"] == "policy_violation" for e in events)
+
+
+def test_session_run_blocks_when_fswatch_missing(tmp_path, monkeypatch):
+    """`clada run` must not silently launch when enforcement is degraded."""
+    from clada.session import EXIT_POLICY_BLOCKED, SessionSupervisor
+
+    events = []
+    original_start = FileAccessProxy.start_fswatch
+
+    monkeypatch.setattr(FileAccessProxy, "fswatch_available", lambda self: False)
+
+    def _fail_if_started(self, executor_pid=None):
+        raise AssertionError("process must not start when policy gate blocks")
+
+    monkeypatch.setattr(FileAccessProxy, "start_fswatch", _fail_if_started)
+
+    sessions_dir = tmp_path / "runtime" / "sessions"
+    sup = SessionSupervisor(["echo", "ok"], sessions_dir=sessions_dir, echo=False)
+    exit_code = sup.run()
+
+    # Restore the method before assertions format tracebacks or other tests run.
+    monkeypatch.setattr(FileAccessProxy, "start_fswatch", original_start)
+
+    assert exit_code == EXIT_POLICY_BLOCKED
+    for line in sup.log_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+
+    kinds = [e["event"] for e in events]
+    assert "policy_degraded" in kinds
+    assert "policy_blocked" in kinds
+    assert "process_start" not in kinds
+    assert events[-1]["event"] == "session_end"
+    assert events[-1]["exit_status"] == EXIT_POLICY_BLOCKED
