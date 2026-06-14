@@ -40,7 +40,9 @@ def test_session_id_is_unique_and_prefixed():
 
 def test_run_echo_ok_smoke(tmp_path):
     """TEST-02: `clada run -- echo ok` succeeds and logs a full session."""
-    sup = SessionSupervisor(["echo", "ok"], sessions_dir=tmp_path, echo=False)
+    sup = SessionSupervisor(
+        ["echo", "ok"], sessions_dir=tmp_path, echo=False, enforce_policy=False
+    )
     exit_code = sup.run()
 
     assert exit_code == 0
@@ -80,6 +82,7 @@ def test_run_propagates_nonzero_exit(tmp_path):
         ["python3", "-c", "import sys; sys.exit(3)"],
         sessions_dir=tmp_path,
         echo=False,
+        enforce_policy=False,
     )
     exit_code = sup.run()
     assert exit_code == 3
@@ -95,7 +98,10 @@ def test_run_propagates_nonzero_exit(tmp_path):
 def test_run_missing_command_reports_guidance(tmp_path):
     """RUN-04: an unknown executable is rejected with actionable guidance."""
     sup = SessionSupervisor(
-        ["clada-no-such-binary-xyz"], sessions_dir=tmp_path, echo=False
+        ["clada-no-such-binary-xyz"],
+        sessions_dir=tmp_path,
+        echo=False,
+        enforce_policy=False,
     )
     exit_code = sup.run()
     assert exit_code == EXIT_COMMAND_NOT_FOUND
@@ -113,7 +119,9 @@ def test_run_missing_command_reports_guidance(tmp_path):
 
 def test_run_logs_one_json_object_per_line(tmp_path):
     """LOG-02: the log is strict JSONL — one object per line, all parseable."""
-    sup = SessionSupervisor(["echo", "hello"], sessions_dir=tmp_path, echo=False)
+    sup = SessionSupervisor(
+        ["echo", "hello"], sessions_dir=tmp_path, echo=False, enforce_policy=False
+    )
     sup.run()
 
     raw = sup.log_path.read_text(encoding="utf-8")
@@ -130,7 +138,33 @@ def test_run_creates_sessions_dir_if_absent(tmp_path):
     """The supervisor creates runtime/sessions/ on demand."""
     nested = tmp_path / "runtime" / "sessions"
     assert not nested.exists()
-    sup = SessionSupervisor(["echo", "ok"], sessions_dir=nested, echo=False)
+    sup = SessionSupervisor(
+        ["echo", "ok"], sessions_dir=nested, echo=False, enforce_policy=False
+    )
     sup.run()
     assert nested.is_dir()
     assert sup.log_path.exists()
+
+
+def test_run_redacts_secret_like_command_and_output_in_jsonl(tmp_path):
+    """LOG-03: persisted session logs omit credential-like argv/output values."""
+    secret = "API_KEY=notreallysecretvalue"
+    sup = SessionSupervisor(
+        ["python3", "-c", f"print('{secret}')"],
+        sessions_dir=tmp_path,
+        echo=False,
+        enforce_policy=False,
+    )
+    exit_code = sup.run()
+
+    assert exit_code == 0
+    raw = sup.log_path.read_text(encoding="utf-8")
+    assert secret not in raw
+    assert "[REDACTED]" in raw
+
+    events = _read_events(sup.log_path)
+    command_events = [e for e in events if e["event"] == "command"]
+    output_events = [e for e in events if e["event"] == "process_output"]
+    assert command_events and output_events
+    assert secret not in json.dumps(command_events, ensure_ascii=False)
+    assert secret not in json.dumps(output_events, ensure_ascii=False)

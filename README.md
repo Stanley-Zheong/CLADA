@@ -199,6 +199,16 @@ clada config init         # Create a default .clada/config.yml
 > suspension, `fswatch` monitoring, and `clada run` are best-effort or planned —
 > see the Implementation Phases and Technical Risk Register below.
 
+> **Policy & degraded enforcement (Phase 3).** Path protection is an explicit,
+> testable policy (`clada.policy`): which paths are secret-bearing, which the
+> Executor may not write, and which it may. Protection relies on best-effort
+> `chmod` + `fswatch` and is **not** a sandbox. When either mechanism fails or
+> is unavailable, CLADA records a structured *degraded* status, emits
+> `policy_degraded` / `policy_violation` session events, and **fails closed** —
+> refusing to launch the Executor unless the Owner explicitly approves running
+> with reduced protection. Sensitive paths and secret-like strings are redacted
+> (omission-preferred) before anything is logged.
+
 ## Implementation Phases
 
 | Phase | Scope | Status |

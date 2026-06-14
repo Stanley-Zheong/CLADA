@@ -69,7 +69,11 @@ def test_run_session_works_despite_corrupt_runtime_state(sandbox, tmp_path):
 
     sessions_dir = tmp_path / "sessions"
     sup = SessionSupervisor(
-        ["echo", "ok"], runtime=runtime, sessions_dir=sessions_dir, echo=False
+        ["echo", "ok"],
+        runtime=runtime,
+        sessions_dir=sessions_dir,
+        echo=False,
+        enforce_policy=False,
     )
     exit_code = sup.run()
 
