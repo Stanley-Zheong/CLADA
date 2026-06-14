@@ -50,3 +50,38 @@ def test_stage_session_paths_leaves_pre_existing_dirty_unstaged(tmp_path):
     assert " M owned.txt" in status
     assert "A  session.txt" in status
     assert (repo / "owned.txt").read_text(encoding="utf-8") == "owner dirty\n"
+
+
+def test_rollback_commands_are_directly_executable_for_untracked_session_files(tmp_path):
+    repo = _init_repo(tmp_path)
+    (repo / "owned.txt").write_text("owner dirty\n", encoding="utf-8")
+    checkpoint = SessionCheckpoint.capture(repo)
+
+    (repo / "session.txt").write_text("session change\n", encoding="utf-8")
+    diff = checkpoint.diff()
+
+    assert diff.rollback_commands() == ["git clean -f -- 'session.txt'"]
+    result = subprocess.run(
+        diff.rollback_commands()[0],
+        cwd=str(repo),
+        shell=True,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert not (repo / "session.txt").exists()
+    assert (repo / "owned.txt").read_text(encoding="utf-8") == "owner dirty\n"
+
+
+def test_rollback_commands_are_path_scoped_for_tracked_session_files(tmp_path):
+    repo = _init_repo(tmp_path)
+    checkpoint = SessionCheckpoint.capture(repo)
+    (repo / "owned.txt").write_text("session change\n", encoding="utf-8")
+    diff = checkpoint.diff()
+
+    assert diff.rollback_commands() == [
+        "git restore --staged -- 'owned.txt'",
+        "git restore -- 'owned.txt'",
+    ]

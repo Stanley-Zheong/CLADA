@@ -83,12 +83,24 @@ class CheckpointDiff:
             return ["Git status unavailable; inspect the working tree manually."]
         if not self.session_owned_paths:
             return ["No session-owned file changes were detected."]
-        quoted = " ".join(_shell_quote(path) for path in self.session_owned_paths)
-        return [
-            f"git restore --staged -- {quoted}",
-            f"git restore -- {quoted}",
-            f"git clean -f -- {quoted}",
+        untracked = [
+            path for path in self.session_owned_paths
+            if self.after.get(path)
+            and self.after[path].index == "?"
+            and self.after[path].worktree == "?"
         ]
+        tracked = [path for path in self.session_owned_paths if path not in untracked]
+        commands: List[str] = []
+        if tracked:
+            quoted = " ".join(_shell_quote(path) for path in tracked)
+            commands.extend([
+                f"git restore --staged -- {quoted}",
+                f"git restore -- {quoted}",
+            ])
+        if untracked:
+            quoted = " ".join(_shell_quote(path) for path in untracked)
+            commands.append(f"git clean -f -- {quoted}")
+        return commands
 
     def to_event(self) -> dict:
         return {
