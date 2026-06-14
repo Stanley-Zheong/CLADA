@@ -34,6 +34,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from clada.audit import DEFAULT_AUDITS_DIR, generate_audit_report
+from clada.checkpoint import SessionCheckpoint
 from clada.orchestrator import CLADA_ROOT, FileAccessProxy, PTYProcess, RuntimeState
 from clada.policy import (
     EnforcementStatus,
@@ -98,6 +100,8 @@ class SessionSupervisor:
         command: List[str],
         runtime: Optional[RuntimeState] = None,
         sessions_dir: Optional[Path] = None,
+        audits_dir: Optional[Path] = None,
+        project_root: Optional[Path] = None,
         session_id: Optional[str] = None,
         echo: bool = True,
         enforce_policy: bool = True,
@@ -105,6 +109,8 @@ class SessionSupervisor:
         self.command = list(command or [])
         self.runtime = runtime
         self.sessions_dir = Path(sessions_dir) if sessions_dir else DEFAULT_SESSIONS_DIR
+        self.audits_dir = Path(audits_dir) if audits_dir else DEFAULT_AUDITS_DIR
+        self.project_root = Path(project_root) if project_root else Path.cwd()
         self.session_id = session_id or new_session_id()
         # When True, child terminal output is mirrored to our stdout so the
         # user sees the agent live; tests disable this to stay quiet.
@@ -115,6 +121,7 @@ class SessionSupervisor:
         self._start_monotonic: Optional[float] = None
         self._proc: Optional[PTYProcess] = None
         self._policy_proxy: Optional[FileAccessProxy] = None
+        self._checkpoint: Optional[SessionCheckpoint] = None
 
     # ── log path ────────────────────────────────────────────────────
     @property
@@ -312,10 +319,11 @@ class SessionSupervisor:
         self._start_monotonic = time.monotonic()
         self._open_log()
         try:
+            self._checkpoint = SessionCheckpoint.capture(self.project_root)
             self._emit(
                 "session_start",
                 command=self._redact_command(),
-                cwd=str(Path.cwd()),
+                cwd=str(self.project_root),
                 clada_version=_clada_version(),
                 supervisor_pid=os.getpid(),
             )
@@ -349,6 +357,8 @@ class SessionSupervisor:
                 return EXIT_POLICY_BLOCKED
 
             exit_code = self._run_process()
+            checkpoint_diff = self._checkpoint.diff()
+            self._emit("checkpoint", **checkpoint_diff.to_event())
             self._emit(
                 "session_end",
                 exit_status=exit_code,
@@ -358,6 +368,9 @@ class SessionSupervisor:
             return exit_code
         except Exception as e:  # pragma: no cover - defensive
             self._emit("error", message=f"Unexpected supervisor error: {e}")
+            checkpoint_diff = self._checkpoint.diff() if self._checkpoint else None
+            if checkpoint_diff is not None:
+                self._emit("checkpoint", **checkpoint_diff.to_event())
             self._emit(
                 "session_end",
                 exit_status=1,
@@ -372,6 +385,19 @@ class SessionSupervisor:
                     self._policy_proxy.restore_protected_paths()
                 except Exception as e:  # pragma: no cover - defensive
                     self._emit("error", message=f"Policy cleanup failed: {e}")
+            try:
+                if self._checkpoint is not None:
+                    if self._log_fh is not None:
+                        self._log_fh.flush()
+                    checkpoint_diff = self._checkpoint.diff()
+                    report_path = generate_audit_report(
+                        session_id=self.session_id,
+                        log_path=self.log_path,
+                        checkpoint=checkpoint_diff,
+                        audits_dir=self.audits_dir,
+                    )
+            except Exception as e:  # pragma: no cover - defensive
+                self._emit("error", message=f"Audit report generation failed: {e}")
             self._close_log()
 
 
@@ -379,6 +405,7 @@ def run_session(
     command: List[str],
     runtime: Optional[RuntimeState] = None,
     sessions_dir: Optional[Path] = None,
+    audits_dir: Optional[Path] = None,
     echo: bool = True,
     enforce_policy: bool = True,
 ) -> int:
@@ -387,6 +414,7 @@ def run_session(
         command,
         runtime=runtime,
         sessions_dir=sessions_dir,
+        audits_dir=audits_dir,
         echo=echo,
         enforce_policy=enforce_policy,
     )
