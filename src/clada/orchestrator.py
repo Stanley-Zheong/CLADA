@@ -209,7 +209,7 @@ class PTYProcess:
     if needed. This is marked as a MUST-VERIFY technical assumption.
     """
 
-    def __init__(self, cmd: list[str], name: str, runtime: RuntimeState):
+    def __init__(self, cmd: list[str], name: str, runtime: Optional[RuntimeState] = None):
         self.cmd = cmd
         self.name = name
         self.runtime = runtime
