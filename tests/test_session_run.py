@@ -144,3 +144,27 @@ def test_run_creates_sessions_dir_if_absent(tmp_path):
     sup.run()
     assert nested.is_dir()
     assert sup.log_path.exists()
+
+
+def test_run_redacts_secret_like_command_and_output_in_jsonl(tmp_path):
+    """LOG-03: persisted session logs omit credential-like argv/output values."""
+    secret = "API_KEY=notreallysecretvalue"
+    sup = SessionSupervisor(
+        ["python3", "-c", f"print('{secret}')"],
+        sessions_dir=tmp_path,
+        echo=False,
+        enforce_policy=False,
+    )
+    exit_code = sup.run()
+
+    assert exit_code == 0
+    raw = sup.log_path.read_text(encoding="utf-8")
+    assert secret not in raw
+    assert "[REDACTED]" in raw
+
+    events = _read_events(sup.log_path)
+    command_events = [e for e in events if e["event"] == "command"]
+    output_events = [e for e in events if e["event"] == "process_output"]
+    assert command_events and output_events
+    assert secret not in json.dumps(command_events, ensure_ascii=False)
+    assert secret not in json.dumps(output_events, ensure_ascii=False)

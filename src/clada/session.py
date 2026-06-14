@@ -17,9 +17,11 @@ Design notes
   stream as stdout, so ``process_output`` events are tagged ``stream="stdout"``. True
   stream separation would require pipe-based capture and is out of scope for
   the Phase 2 smoke path.
-* Sensitive data: this wrapper never reads or logs file contents, the
-  environment, or secrets. It logs only what the child writes to its terminal,
-  which the caller has already chosen to surface.
+* Sensitive data: this wrapper never reads file contents or the environment.
+  Persisted JSONL command/output fields are redacted before write. Live terminal
+  echo still mirrors the child process output because the caller explicitly
+  chose an interactive run; LOG-03's redaction guarantee applies to CLADA's
+  persisted logs.
 """
 
 import json
@@ -38,6 +40,7 @@ from clada.policy import (
     EventSink,
     evaluate_enforcement,
     redact_path,
+    redact_text,
 )
 
 # Session logs live next to the rest of the runtime state.
@@ -149,6 +152,10 @@ class SessionSupervisor:
         if self._start_monotonic is None:
             return 0.0
         return round(time.monotonic() - self._start_monotonic, 3)
+
+    def _redact_command(self) -> List[str]:
+        """Return a log-safe copy of the command argv."""
+        return [redact_text(part) for part in self.command]
 
     # ── policy events (LOG-03) ──────────────────────────────────────
     def policy_event_sink(self) -> EventSink:
@@ -295,7 +302,7 @@ class SessionSupervisor:
 
     def _write_output(self, chunk: str):
         # PTY merges stderr into stdout; tag the unified stream accordingly.
-        self._emit("process_output", stream="stdout", data=chunk)
+        self._emit("process_output", stream="stdout", data=redact_text(chunk))
         if self.echo:
             sys.stdout.write(chunk)
             sys.stdout.flush()
@@ -307,13 +314,13 @@ class SessionSupervisor:
         try:
             self._emit(
                 "session_start",
-                command=self.command,
+                command=self._redact_command(),
                 cwd=str(Path.cwd()),
                 clada_version=_clada_version(),
                 supervisor_pid=os.getpid(),
             )
             # Explicit command record (RUN-02): what we were asked to run.
-            self._emit("command", argv=self.command)
+            self._emit("command", argv=self._redact_command())
 
             err = self._validate_command()
             if err:
