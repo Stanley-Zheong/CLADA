@@ -2,7 +2,9 @@
 
 **C**losed-**L**oop **A**utonomous **D**evelopment **A**rchitecture（闭环自主开发架构）
 
-一个将 AI 编程智能体（如 Claude Code）置于可验证开发流水线中的治理框架 — 通过机器可读宪法、形式化状态机和物理隔离，让人始终掌控全局。
+一个将 AI 编程智能体（如 Claude Code）置于可验证开发流水线中的治理框架 — 通过机器可读宪法、形式化状态机以及（计划中的）智能体进程物理隔离，让人始终掌控全局。
+
+> **当前状态速览。** 机器可读宪法、状态机、Contract/DR 验证器、DSL 编译器**目前均已实现并有测试覆盖**；物理隔离（进程挂起、只读锁、文件写入监控）仍为 **best-effort 或计划中** —— 详见下方的[成熟度说明](#cli-命令)与实现路线图。本 README 描述的是目标设计，并非全部均为当前已上线行为。
 
 ## 设计哲学
 
@@ -79,12 +81,16 @@ IDLE ──/init──▶ BOOTSTRAP ──确认──▶ IDLE
 
 ## 核心特性
 
-- **双检锁 Contract 生成**：两个独立 AI 模型分别生成项目宪法；Gateway 逐字段比对；Owner 仅仲裁冲突点。杜绝单一模型偏见写入宪法。
-- **物理隔离**：`SIGSTOP`/`SIGCONT` 挂起执行者；审计期间 `chmod 555` 将源码目录设为只读。
-- **模式监听器**：基于正则触发的状态转移（`[REQ_REVIEW]`、`[DONE]`、`[B_PLAN]`、`[TRACE]`）。
-- **三级记忆系统**：L1（即时上下文）、L2（结构化决策索引）、L3（历史存档）— 针对 100+ 轮迭代后的幻觉问题设计。
-- **Clean Shutdown 协议**：Quota 耗尽或异常终止时自动 git stash + 恢复选择提示。
-- **ADR 决策记录**：每一项架构决策以机器可读的 front-matter 格式记录，并经过形式化验证。
+下表描述的是**目标设计**，“状态”列标明哪些已上线、哪些为 best-effort 或计划中（详见实现路线图）。
+
+| 特性 | 说明 | 状态 |
+|------|------|------|
+| **ADR 决策记录** | 每一项架构决策以机器可读的 front-matter 格式记录，并经过形式化验证 | 已实现 |
+| **三级记忆系统** | L1（即时上下文）、L2（结构化决策索引）、L3（历史存档）— 针对 100+ 轮迭代后的幻觉问题设计 | L2 索引已实现；L3 计划中 |
+| **模式监听器** | 基于正则触发的状态转移（`[REQ_REVIEW]`、`[DONE]`、`[B_PLAN]`、`[TRACE]`） | best-effort（需实时 Gateway） |
+| **物理隔离** | `SIGSTOP`/`SIGCONT` 挂起执行者；审计期间 `chmod 555` 将源码目录设为只读 | 计划中（Phase 2）—— 尚未强制启用 |
+| **双检锁 Contract 生成** | 两个独立 AI 模型分别生成项目宪法；Gateway 逐字段比对；Owner 仅仲裁冲突点 | 计划中（Phase 3） |
+| **Clean Shutdown 协议** | Quota 耗尽或异常终止时自动 git stash + 恢复选择提示 | 计划中（Phase 3） |
 
 ## 项目结构
 
@@ -93,33 +99,65 @@ CLADA/
 ├── src/
 │   └── clada/                 # Python 包
 │       ├── __init__.py        # 包导出
-│       ├── __main__.py        # CLI 入口（python -m clada）
+│       ├── __main__.py        # CLI 入口（python -m clada / clada）
 │       ├── orchestrator.py    # 状态机 + PTY 管理器 + Gateway REPL
 │       ├── bootstrap.py       # 引导流程 + 记忆管理器
-│       └── contract_validator.py  # Contract/DR 验证 + L2 索引
+│       ├── contract_validator.py  # Contract/DR 验证 + L2 索引
+│       ├── config.py          # LLM 角色配置（.clada/config.yml）
+│       └── dsl/               # S 表达式 DSL → contract.json + spec.md
+├── tests/                     # 基线 pytest 测试（状态机、验证器、DSL）
 ├── docs/
 │   └── CLADA_Complete_Spec.html  # 完整技术方案
-├── requirements.txt
+├── pyproject.toml             # 打包配置 + 控制台脚本（clada）
+├── requirements.txt           # pyproject.toml 依赖的扁平镜像
 ├── .gitignore
 └── README.md
 ```
 
 ## 快速开始
 
-### 前置依赖（macOS）
+### 安装（macOS / Linux，Python ≥ 3.9）
 
 ```bash
-pip install rich psutil jsonschema pexpect watchdog
-brew install fswatch              # 可选，用于文件写入监控
-npm install -g @anthropic-ai/claude-code  # Executor 智能体
+git clone https://github.com/Stanley-Zheong/CLADA.git
+cd CLADA
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .                  # 安装 CLADA 及依赖，并注册 `clada` 命令
+clada help                        # 验证安装
+```
+
+可选附加项：
+
+```bash
+pip install -e ".[test]"          # 基础安装的别名 —— pytest 已包含在基础依赖中
+brew install fswatch              # 可选，用于文件写入监控（best-effort / 计划中）
+npm install -g @anthropic-ai/claude-code  # Executor 智能体（仅运行实时 Gateway 时需要）
+```
+
+> `pip install -e .` 读取 `pyproject.toml`；`requirements.txt` 为同一依赖集合的
+> 扁平镜像，供习惯 `pip install -r requirements.txt` 的环境使用。
+
+### 运行测试
+
+`pytest` 已包含在基础依赖中，因此执行 `pip install -e .` 后即可直接运行基线测试：
+
+```bash
+pytest                            # 运行 tests/ 下的基线测试
+```
+
+### 首次运行
+
+```bash
+clada help                        # 列出所有命令
+clada dsl domains                 # 列出内置 DSL 领域（无需项目）
 ```
 
 ### 引导新项目
 
 ```bash
 cd 你的项目目录
-python3 -m clada init             # 引导：定义 Goal + Contract
-python3 -m clada                  # 启动 Gateway
+clada init                        # 引导：定义 Goal + Contract  （等价：python3 -m clada init）
+clada                             # 启动 Gateway                （等价：python3 -m clada）
 ```
 
 ### Gateway 命令
@@ -138,14 +176,25 @@ clada> /autopilot [on|off] 切换 Owner 离线模式
 
 ### CLI 命令
 
+执行 `pip install -e .` 后，以下命令同时支持 `clada <cmd>` 与 `python3 -m clada <cmd>`。
+
 ```bash
-python3 -m clada status             # 查看系统状态
-python3 -m clada validate contract  # 验证 docs/spec/contract.json
-python3 -m clada validate dr <文件>  # 验证单个 DR-xxx.md
-python3 -m clada validate all       # 验证所有 DR
-python3 -m clada index rebuild      # 重建 L2 index.json
-python3 -m clada cold-start         # 扫描仓库生成 architecture.md
+clada status              # 查看系统状态
+clada validate contract   # 验证 docs/spec/contract.json
+clada validate dr <文件>   # 验证单个 DR-xxx.md
+clada validate all        # 验证所有 DR
+clada index rebuild       # 重建 L2 index.json
+clada cold-start          # 扫描仓库生成 architecture.md
+clada dsl domains         # 列出可用的 DSL 领域
+clada dsl compile <文件>   # 编译 .dsl 文件 → contract.json + spec.md
+clada dsl template <领域>  # 打印某领域的 DSL 模板
+clada config init         # 创建默认 .clada/config.yml
 ```
+
+> **成熟度说明（Phase 1）。** 可安装打包、状态机、Contract/DR 验证器、DSL 编译器
+> 均已实现并由 `tests/` 套件覆盖；实时 Gateway 循环（无参数的 `clada`）、PTY 挂起、
+> `fswatch` 监控、`clada run` 仍为 best-effort 或计划中 —— 详见下方实现路线图与
+> 技术风险登记。
 
 ## 实现路线图
 
