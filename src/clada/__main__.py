@@ -14,6 +14,7 @@ Phase 1: PTY + State Machine + Validator
 
 USAGE:
   python3 -m clada                       Start interactive Gateway (main mode)
+  python3 -m clada run -- <command>      Run an agent command under session supervision
   python3 -m clada init                  Run Bootstrap (create project constitution)
   python3 -m clada status                Show current system state
   python3 -m clada validate contract     Validate docs/spec/contract.json
@@ -182,6 +183,30 @@ def cmd_dsl(args: list):
         print("Usage: clada dsl [compile <file>|domains|template <domain>]")
 
 
+def cmd_run(args: list):
+    """
+    `clada run -- <agent command>` — launch an agent command under the
+    Session Supervisor with structured JSONL logging.
+
+    Accepts both `clada run -- echo ok` and `clada run echo ok`. Everything
+    after a leading `--` is treated verbatim as the command to execute.
+    """
+    command = args[1:] if args and args[0] == "--" else args
+
+    if not command:
+        print("Usage: clada run -- <agent command>", file=sys.stderr)
+        print("Example: clada run -- echo ok", file=sys.stderr)
+        sys.exit(2)
+
+    from clada.session import SessionSupervisor
+
+    supervisor = SessionSupervisor(command)
+    exit_code = supervisor.run()
+    print(f"\n[clada] session {supervisor.session_id} "
+          f"exited {exit_code} → {supervisor.log_path}", file=sys.stderr)
+    sys.exit(exit_code)
+
+
 def cmd_config(args: list):
     sub = args[0] if args else "init"
     if sub == "init":
@@ -211,6 +236,9 @@ def main():
         runtime = RuntimeState()
         proxy = FileAccessProxy(Path("."), runtime)
         run_bootstrap(runtime, proxy)
+
+    elif cmd == "run":
+        cmd_run(args[1:])
 
     elif cmd == "status":
         cmd_status()
