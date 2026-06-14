@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from clada.orchestrator import CLADA_ROOT, PTYProcess, RuntimeState
+from clada.policy import EnforcementStatus, EventSink, redact_path
 
 # Session logs live next to the rest of the runtime state.
 DEFAULT_SESSIONS_DIR = CLADA_ROOT / "runtime" / "sessions"
@@ -137,6 +138,37 @@ class SessionSupervisor:
         if self._start_monotonic is None:
             return 0.0
         return round(time.monotonic() - self._start_monotonic, 3)
+
+    # ── policy events (LOG-03) ──────────────────────────────────────
+    def policy_event_sink(self) -> EventSink:
+        """Return a ``(event_name, fields)`` sink for a FileAccessProxy to emit
+        ``policy_degraded`` / ``policy_violation`` events into this session's
+        JSONL log."""
+        def sink(event: str, fields: dict) -> None:
+            self._emit(event, **fields)
+        return sink
+
+    def emit_policy_status(self, status: EnforcementStatus) -> EnforcementStatus:
+        """Record the enforcement status for this session.
+
+        Emits ``policy_degraded`` when enforcement is not fully intact (so the
+        log never implies hardening that didn't happen), and ``policy_enforced``
+        on the clean path. Returns the status for convenience.
+        """
+        event = "policy_degraded" if status.degraded else "policy_enforced"
+        self._emit(event, **status.to_event())
+        return status
+
+    def emit_policy_violation(self, path, *, rule: str = "unknown",
+                              action: str = "log", killed: bool = False) -> None:
+        """Emit a ``policy_violation`` event with the path redacted first."""
+        self._emit(
+            "policy_violation",
+            path=redact_path(path),
+            rule=rule,
+            action=action,
+            killed=killed,
+        )
 
     # ── validation ──────────────────────────────────────────────────
     def _validate_command(self) -> Optional[str]:

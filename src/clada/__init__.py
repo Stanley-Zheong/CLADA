@@ -4,6 +4,11 @@ Phase 1: PTY + State Machine + Validator
 """
 
 from clada.orchestrator import State, RuntimeState, FileAccessProxy, show_status, main as orchestrator_main
+from clada.policy import (
+    PathPolicy, EnforcementStatus, EnforcementMode,
+    EnforcementAction, EnforcementDecision, evaluate_enforcement,
+    redact_path, redact_text, looks_like_secret,
+)
 from clada.bootstrap import run_bootstrap, MemoryManager
 from clada.contract_validator import (
     ContractValidator, DualLockComparator,

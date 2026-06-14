@@ -10,7 +10,16 @@ import termios, tty, fcntl
 from pathlib import Path
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Callable
+
+from clada.policy import (
+    PathPolicy,
+    EnforcementStatus,
+    EventSink,
+    evaluate_enforcement,
+    merge_statuses,
+    redact_path,
+)
 
 try:
     from rich.console import Console
@@ -456,51 +465,105 @@ class HeartbeatGuardian:
 # ─────────────────────────────────────────────
 class FileAccessProxy:
     """
-    On macOS, full LD_PRELOAD interception isn't available for
-    system-integrity-protected processes. We use two complementary approaches:
+    Best-effort file-access protection around an Executor agent.
 
-    1. Pre-execution path validation: Before Executor starts, set restrictive
-       permissions on protected directories.
-    2. fswatch monitoring: Alert + kill on unauthorized write attempts.
+    On macOS, full LD_PRELOAD / syscall interception isn't available for
+    system-integrity-protected processes, so this is **not** a sandbox. We use
+    two complementary, openly-degradable mechanisms:
 
-    RISK-04 NOTE: Full syscall interception requires SIP-disabled macOS or
-    a Linux environment. This implementation uses best-effort file permission
-    hardening as the primary mechanism.
+    1. chmod hardening: make CLADA's own guardrail directories read-only before
+       the Executor starts (best-effort; may fail on some filesystems).
+    2. fswatch monitoring: detect (and optionally act on) unauthorised writes
+       (best-effort; absent if fswatch isn't installed).
+
+    Both mechanisms can partially fail. Rather than pretend success, the
+    enforcement methods return a :class:`~clada.policy.EnforcementStatus` and,
+    when an ``event_sink`` is wired, emit structured ``policy_degraded`` /
+    ``policy_violation`` events. The decision of whether to proceed when
+    degraded lives in :func:`clada.policy.evaluate_enforcement`, not here.
+
+    RISK-04 NOTE: this is a speed-bump, not a jail. Do not describe it as
+    hardened sandboxing.
     """
 
-    PROTECTED_READ_PATTERNS = [
-        ".env", ".env.*", "secrets/", ".secrets",
-        "*.pem", "*.key", "*.p12",
-    ]
-    EXECUTOR_WRITE_FORBIDDEN = [
-        "docs/decisions/", "docs/spec/contract.json",
-        ".clada/", "runtime/",
-    ]
-
-    def __init__(self, project_root: Path, runtime: RuntimeState):
+    def __init__(
+        self,
+        project_root: Path,
+        runtime: Optional[RuntimeState] = None,
+        policy: Optional[PathPolicy] = None,
+        event_sink: Optional[EventSink] = None,
+    ):
         self.root = project_root
         self.runtime = runtime
+        self.policy = policy or PathPolicy.default()
+        # Optional callable(event_name, fields) — typically a SessionSupervisor
+        # policy-event emitter. Absent in pure-CLI flows.
+        self.event_sink = event_sink
         self._watcher_proc: Optional[subprocess.Popen] = None
 
-    def harden_protected_paths(self):
-        """Make docs/decisions read-only (Executor must not write)."""
-        for path_str in ["docs/decisions", "runtime", ".comm"]:
-            p = self.root / path_str
-            if p.exists():
-                subprocess.run(["chmod", "-R", "555", str(p)], capture_output=True)
-        _log("[PROXY] Protected paths hardened (chmod 555)", "dim")
+    # ── event helper ────────────────────────────────────────────────
+    def _emit(self, event: str, fields: dict) -> None:
+        if self.event_sink is None:
+            return
+        try:
+            self.event_sink(event, fields)
+        except Exception as e:  # never let logging break enforcement
+            _log(f"[PROXY] event sink error: {e}", "dim")
 
-    def restore_protected_paths(self):
-        for path_str in ["docs/decisions", "runtime", ".comm"]:
+    def _chmod(self, path: Path, mode: str) -> bool:
+        """Run a recursive chmod, returning True on success. Never raises."""
+        try:
+            r = subprocess.run(["chmod", "-R", mode, str(path)], capture_output=True)
+            return r.returncode == 0
+        except Exception:
+            return False
+
+    # ── hardening (chmod) ───────────────────────────────────────────
+    def harden_protected_paths(self) -> EnforcementStatus:
+        """Make guardrail directories read-only; report what actually stuck.
+
+        Returns an :class:`EnforcementStatus`. A chmod that fails (non-zero
+        exit, missing tool, read-only FS) is recorded as a degraded reason
+        rather than swallowed.
+        """
+        status = EnforcementStatus(chmod_attempted=True)
+        for path_str in self.policy.harden_dirs:
             p = self.root / path_str
-            if p.exists():
-                subprocess.run(["chmod", "-R", "755", str(p)], capture_output=True)
+            if not p.exists():
+                continue
+            if self._chmod(p, "555"):
+                status.hardened_paths.append(path_str)
+            else:
+                status.chmod_failures.append(path_str)
+                status.add_reason(f"chmod failed on {path_str}")
+
+        if status.hardened_paths and not status.chmod_failures:
+            _log("[PROXY] Protected paths hardened (chmod 555)", "dim")
+        elif status.chmod_failures:
+            _log(f"[PROXY] chmod hardening degraded: {status.chmod_failures}", "yellow")
+        else:
+            _log("[PROXY] No guardrail paths present to harden", "dim")
+        return status
+
+    def restore_protected_paths(self) -> EnforcementStatus:
+        """Restore writable permissions; report any restore failure."""
+        status = EnforcementStatus()
+        for path_str in self.policy.harden_dirs:
+            p = self.root / path_str
+            if not p.exists():
+                continue
+            if not self._chmod(p, "755"):
+                status.restore_failures.append(path_str)
+                status.add_reason(f"permission restore failed on {path_str}")
+        if status.restore_failures:
+            _log(f"[PROXY] permission restore degraded: {status.restore_failures}", "yellow")
+        return status
 
     def lock_src_for_audit(self):
         """Lock src/ during AUDITING state."""
         src = self.root / "src"
         if src.exists():
-            subprocess.run(["chmod", "-R", "555", str(src)], capture_output=True)
+            self._chmod(src, "555")
             self.runtime.src_lock = True
             self.runtime.save()
             _log("[PROXY] src/ locked for AUDITING (chmod 555)", "yellow")
@@ -508,31 +571,55 @@ class FileAccessProxy:
     def unlock_src(self):
         src = self.root / "src"
         if src.exists():
-            subprocess.run(["chmod", "-R", "755", str(src)], capture_output=True)
+            self._chmod(src, "755")
         self.runtime.src_lock = False
         self.runtime.save()
         _log("[PROXY] src/ unlocked", "green")
 
-    def start_fswatch(self, executor_pid: Optional[int] = None):
+    # ── monitoring (fswatch) ────────────────────────────────────────
+    def fswatch_available(self) -> bool:
+        """True if the fswatch binary is on PATH. Never raises."""
+        try:
+            return subprocess.run(
+                ["which", "fswatch"], capture_output=True
+            ).returncode == 0
+        except Exception:
+            return False
+
+    def assess_enforcement(self, harden_status: EnforcementStatus) -> EnforcementStatus:
+        """Combine an applied chmod status with an fswatch *availability* probe
+        into the status used to gate execution — without starting fswatch yet
+        (it needs the executor pid). Used by the fail-closed gate (POL-04)."""
+        probe = EnforcementStatus(fswatch_attempted=True)
+        probe.fswatch_available = self.fswatch_available()
+        if not probe.fswatch_available:
+            probe.add_reason("fswatch not installed — write monitoring unavailable")
+        return merge_statuses(harden_status, probe)
+
+    def start_fswatch(self, executor_pid: Optional[int] = None) -> EnforcementStatus:
         """
         Start fswatch on protected directories.
         On unauthorized write: log + optionally kill the writing process.
         RISK-02: bind-mount fswatch behavior needs empirical verification.
+
+        Returns an :class:`EnforcementStatus` describing whether monitoring is
+        actually live. Missing fswatch is a degraded reason, not a silent skip.
         """
-        watch_paths = [
-            str(self.root / "docs/decisions"),
-            str(self.root / "runtime"),
-        ]
+        status = EnforcementStatus(fswatch_attempted=True)
+        watch_paths = [str(self.root / d) for d in self.policy.watch_dirs]
         existing = [p for p in watch_paths if Path(p).exists()]
         if not existing:
-            return
+            status.add_reason("no watch directories present")
+            return status
 
         # Check fswatch availability
-        result = subprocess.run(["which", "fswatch"], capture_output=True)
-        if result.returncode != 0:
+        available = self.fswatch_available()
+        status.fswatch_available = available
+        if not available:
+            status.add_reason("fswatch not installed — write monitoring disabled")
             _log("[PROXY] fswatch not found — install with: brew install fswatch", "yellow")
             _log("[PROXY] File write monitoring disabled (chmod-only protection)", "dim")
-            return
+            return status
 
         try:
             self._watcher_proc = subprocess.Popen(
@@ -545,22 +632,42 @@ class FileAccessProxy:
                 daemon=True, name="fswatch"
             )
             t.start()
+            status.fswatch_active = True
             _log("[PROXY] fswatch monitoring started", "dim")
         except Exception as e:
+            status.add_reason(f"fswatch start failed: {e}")
             _log(f"[PROXY] fswatch start failed: {e}", "yellow")
+        return status
 
     def _fswatch_loop(self, executor_pid: Optional[int]):
-        if not self._watcher_proc:
+        if not self._watcher_proc or self._watcher_proc.stdout is None:
             return
         for line in self._watcher_proc.stdout:
-            path = line.decode().strip()
-            _log(f"[SECURITY] ⚠️  Unauthorized write detected: {path}", "red")
-            if executor_pid:
-                _log(f"[SECURITY] Killing executor pid={executor_pid}", "red")
-                try:
-                    os.kill(executor_pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+            path = line.decode(errors="replace").strip()
+            self._report_violation(path, executor_pid)
+
+    def _report_violation(self, path: str, executor_pid: Optional[int]) -> None:
+        """Handle a detected unauthorised write: log (redacted), emit a
+        ``policy_violation`` event, and optionally kill the writer.
+
+        Extracted from the watch loop so it is unit-testable without an actual
+        fswatch process or a real kill."""
+        safe = redact_path(path, self.policy)
+        _log(f"[SECURITY] ⚠️  Unauthorized write detected: {safe}", "red")
+        killed = False
+        if executor_pid:
+            _log(f"[SECURITY] Killing executor pid={executor_pid}", "red")
+            try:
+                os.kill(executor_pid, signal.SIGKILL)
+                killed = True
+            except ProcessLookupError:
+                pass
+        self._emit("policy_violation", {
+            "path": safe,
+            "rule": self.policy.classify_write(path),
+            "action": "kill" if killed else "log",
+            "killed": killed,
+        })
 
     def stop_fswatch(self):
         if self._watcher_proc:
@@ -942,6 +1049,53 @@ class REPL:
         else:
             _log("[PROPOSE] Edit docs/spec/current_spec.md then run /execute", "dim")
 
+    def _gate_enforcement(self, harden_status: EnforcementStatus) -> bool:
+        """Return True if execution may proceed under the current enforcement.
+
+        Combines the applied chmod result with an fswatch availability probe,
+        emits a policy event, then applies the fail-closed / owner-approval
+        decision (POL-04). When degraded and the Owner is offline (autopilot),
+        we fail closed; when interactive, we ask for explicit approval.
+        """
+        gate = self.proxy.assess_enforcement(harden_status)
+        # Surface what's actually enforced (LOG-03) via the proxy's event sink.
+        event = "policy_degraded" if gate.degraded else "policy_enforced"
+        self.proxy._emit(event, gate.to_event())
+
+        decision = evaluate_enforcement(gate, owner_approved=False, fail_closed=True)
+        if decision.allowed:
+            return True
+
+        _log(f"[POLICY] Enforcement degraded — {decision.reason}", "red")
+        for r in gate.degraded_reasons:
+            _log(f"[POLICY]   • {r}", "yellow")
+
+        if self.runtime.autopilot:
+            _log("[POLICY] Autopilot (Owner offline): failing closed, refusing to launch.", "red")
+            self.proxy._emit("policy_blocked", {"reason": decision.reason})
+            return False
+
+        approved = self._owner_confirm(
+            "Enforcement is degraded. Launch Executor anyway with reduced protection?"
+        )
+        re_decision = evaluate_enforcement(gate, owner_approved=approved, fail_closed=True)
+        if re_decision.allowed:
+            _log("[POLICY] Owner approved degraded enforcement — proceeding.", "yellow")
+            self.proxy._emit("policy_override", {"reason": re_decision.reason})
+            return True
+        _log("[POLICY] Owner declined — failing closed.", "red")
+        self.proxy._emit("policy_blocked", {"reason": decision.reason})
+        return False
+
+    def _owner_confirm(self, prompt: str) -> bool:
+        """Ask the Owner a yes/no question. Defaults to 'no' (fail closed)."""
+        try:
+            if HAS_RICH and console:
+                return bool(Confirm.ask(prompt, default=False))
+            return input(f"{prompt} [y/N]: ").strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
+
     def _cmd_execute(self):
         if self.runtime.state not in (State.PROPOSING, State.IDLE):
             _log(f"[EXECUTE] Must be PROPOSING or IDLE (current: {self.runtime.state})", "red")
@@ -954,7 +1108,16 @@ class REPL:
         self.runtime.transition(State.EXECUTING)
         self.runtime.active_agent = "executor"
         self.runtime.save()
-        self.proxy.harden_protected_paths()
+
+        # Apply protection and gate on it (POL-04). If enforcement is degraded
+        # we fail closed unless the Owner explicitly approves — we never launch
+        # the Executor while silently pretending paths are protected.
+        harden_status = self.proxy.harden_protected_paths()
+        if not self._gate_enforcement(harden_status):
+            self.proxy.restore_protected_paths()
+            self.runtime.active_agent = "none"
+            self.runtime.transition(State.IDLE)
+            return
 
         # Build claude command with spec context
         spec_content = spec_file.read_text()
@@ -1155,6 +1318,28 @@ class REPL:
 
 
 # ─────────────────────────────────────────────
+# Policy event sink (LOG-03)
+# ─────────────────────────────────────────────
+def make_policy_event_logger(log_path: Path) -> EventSink:
+    """Return an EventSink that appends policy events as JSONL.
+
+    Reuses the Phase 2 JSONL contract (``ts`` + ``event`` + fields) so policy
+    events from the interactive REPL are auditable alongside session logs.
+    Failures to write are swallowed — logging must never break enforcement.
+    """
+    def sink(event: str, fields: dict) -> None:
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            record = {"ts": datetime.now().isoformat(), "event": event}
+            record.update(fields or {})
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+    return sink
+
+
+# ─────────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────────
 def main():
@@ -1162,7 +1347,8 @@ def main():
         d.mkdir(parents=True, exist_ok=True)
 
     runtime = RuntimeState()
-    proxy = FileAccessProxy(CLADA_ROOT, runtime)
+    sink = make_policy_event_logger(RUNTIME_DIR / "sessions" / "policy-events.jsonl")
+    proxy = FileAccessProxy(CLADA_ROOT, runtime, event_sink=sink)
     repl = REPL(runtime, proxy)
     repl.run()
 
