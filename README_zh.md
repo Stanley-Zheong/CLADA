@@ -160,7 +160,7 @@ CLADA/
 │   ├── demo.md                # 演示走查：输出、日志、审计、回滚
 │   ├── jsonl-event-schema.md  # 会话 JSONL 事件 Schema + 示例
 │   ├── known-limitations.md   # macOS chmod/fswatch 语义 + 推迟范围
-│   └── CLADA_Complete_Spec.html  # 完整技术方案
+│   └── CLADA_Complete_Spec.html  # 目标 / 设计架构规格（计划蓝图，非全部已实现）
 ├── pyproject.toml             # 打包配置 + 控制台脚本（clada）
 ├── requirements.txt           # pyproject.toml 依赖的扁平镜像
 ├── .gitignore

@@ -167,7 +167,7 @@ CLADA/
 │   ├── demo.md                # Demo walkthrough: output, log, audit, rollback
 │   ├── jsonl-event-schema.md  # Session JSONL event schema + examples
 │   ├── known-limitations.md   # macOS chmod/fswatch semantics + deferred scope
-│   └── CLADA_Complete_Spec.html  # Full technical specification
+│   └── CLADA_Complete_Spec.html  # Target/design architecture spec (planned vision, not all implemented)
 ├── pyproject.toml             # Packaging + console script (clada)
 ├── requirements.txt           # Flat dependency mirror of pyproject.toml
 ├── .gitignore

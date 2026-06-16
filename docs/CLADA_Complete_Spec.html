@@ -471,12 +471,26 @@
       <div class="meta-item"><strong>Executor</strong>DeepSeek V4（低成本执行）</div>
       <div class="meta-item"><strong>Verifier</strong>Claude Sonnet（精准审计）</div>
       <div class="meta-item"><strong>Gateway</strong>Python · PTY · fswatch</div>
-      <div class="meta-item"><strong>Isolation</strong>Docker · chmod 555</div>
-      <div class="meta-item"><strong>完整度</strong>95%（可进入实现阶段）</div>
+      <div class="meta-item"><strong>Isolation</strong>chmod 555（已上线，best-effort）· Docker（计划中）</div>
+      <div class="meta-item"><strong>文档性质</strong>目标 / 设计架构（非全部已实现）</div>
     </div>
   </div>
 
   <div class="content">
+
+    <!-- STATUS BANNER: target/design architecture, not all implemented -->
+    <div class="risk-box" style="border-left-color: var(--accent); background: rgba(74,240,160,0.07); border-color: rgba(74,240,160,0.28); margin-bottom: 28px;">
+      <strong style="color: var(--accent);">⚑ 文档性质：目标 / 设计架构（非当前已上线行为）</strong>
+      本文是 CLADA 的<strong>目标架构设计规格</strong>，描述的是系统要演进到的样子，<strong>并非全部已实现</strong>。
+      下文中的物理隔离（LD_PRELOAD / ptrace 文件系统调用拦截、Docker 容器隔离、只读 Volume、隔离网络）、
+      进程挂起（SIGSTOP/SIGCONT）、双检锁 Bootstrap、L3 记忆等，均为<strong>计划中 / best-effort，尚未作为当前保证交付</strong>。
+      当前真正已上线并有测试覆盖的是<strong>运行时安全护栏</strong>（<code>clada run</code> 会话监督、策略引擎与 fail-closed 降级、
+      脱敏 JSONL 日志、审计报告与按路径限定回滚）—— 这部分基于 best-effort 的 <code>chmod</code> + 可选 <code>fswatch</code>，
+      是「减速带」而非沙箱。
+      以「当前实际可用」为准请看：
+      <code>README.md</code> / <code>README_zh.md</code>、<code>docs/demo.md</code>、<code>docs/jsonl-event-schema.md</code>、
+      <code>docs/known-limitations.md</code>。本文中的「完整度 / 100%」等进度数字指<strong>设计完成度</strong>，不代表实现或验证状态。
+    </div>
 
     <!-- SECTION 1: 设计哲学 -->
     <div class="section" id="overview">
@@ -510,9 +524,9 @@
         </div>
         <div class="card red">
           <div class="card-icon">🔒</div>
-          <div class="card-title">物理隔离</div>
-          <div class="card-body">Executor 的文件访问权限由 Gateway 在操作系统层级代理拦截。Verifier 的测试运行在 Docker 容器内，测试代码无法影响宿主机。</div>
-          <div class="card-tag">Hardware-Enforced</div>
+          <div class="card-title">物理隔离（目标设计）</div>
+          <div class="card-body">目标设计：Executor 的文件访问由 Gateway 在操作系统层级代理拦截，Verifier 的测试运行在 Docker 容器内。<strong>当前已上线的是 best-effort 的 <code>chmod 555</code> 加固 + 可选 <code>fswatch</code> 监控（减速带，非沙箱）；OS 级拦截与 Docker 隔离仍为计划中。</strong></div>
+          <div class="card-tag">Planned / Best-effort</div>
         </div>
       </div>
     </div>
@@ -1089,10 +1103,17 @@ V4-Pro 在编码基准测试中达到可比分数，成本降低约 90%，对长
     <div class="section" id="isolation">
       <div class="section-label">§ 10 · Isolation</div>
       <h2>物理隔离机制详解</h2>
-      <p>CLADA 的隔离分两个独立防御层，针对不同的安全目标，适用对象不同。</p>
+      <div class="risk-box" style="border-left-color: var(--accent); background: rgba(74,240,160,0.07); border-color: rgba(74,240,160,0.28);">
+        <strong style="color: var(--accent);">⚑ 本节为目标设计，非当前已上线行为</strong>
+        以下两层隔离（OS 级文件系统调用拦截、Docker 容器隔离）描述的是<strong>计划中的目标架构</strong>。
+        当前实际交付的只有 best-effort 的 <code>chmod 555</code> 加固 + 可选 <code>fswatch</code> 监控，
+        且在不可用时 <code>clada run</code> 会 fail-closed（退出码 78）。LD_PRELOAD / ptrace 拦截与 Docker 隔离<strong>均未实现</strong>，
+        不应被理解为当前保证。详见 <code>docs/known-limitations.md</code>。
+      </div>
+      <p>CLADA 的隔离分两个独立防御层，针对不同的安全目标，适用对象不同（<strong>以下为目标设计</strong>）。</p>
 
       <table>
-        <tr><th>防御层</th><th>适用对象</th><th>防御目标</th><th>实现方式</th></tr>
+        <tr><th>防御层</th><th>适用对象</th><th>防御目标</th><th>实现方式（目标设计 · 未实现）</th></tr>
         <tr>
           <td><strong>宿主机文件代理</strong></td>
           <td>Executor</td>
@@ -1222,7 +1243,7 @@ docker rm -f clada-verifier-$(ITERATION_ID)</code></pre>
         <tr>
           <td>chmod 互斥锁 + fswatch</td>
           <td>AUDITING 阶段物理锁定逻辑</td>
-          <td>bind mount 场景下 fswatch 捕获率 100%</td>
+          <td>验证 fswatch 在 bind mount 场景下的捕获行为（捕获率<strong>待实测，不保证 100%</strong>；<code>chmod 555</code> 为主防线，fswatch 仅为辅助监控）</td>
         </tr>
         <tr>
           <td>L2 index.json 维护</td>
