@@ -2,11 +2,60 @@
 
 **C**losed-**L**oop **A**utonomous **D**evelopment **A**rchitecture
 
-A governance framework that wraps AI coding agents (like Claude Code) in a verifiable development pipeline — giving the human Owner control through a machine-readable constitution, a formal state machine, and (planned) physical isolation of the agent process.
+A **runtime safety harness for AI coding agents**. CLADA wraps any agent process (`claude`, `codex`, or your own) with `clada run`: it hardens its own guardrail files, monitors for unauthorised writes, logs every session as structured JSONL, and produces an audit report with a path-scoped rollback plan — so an autonomous agent cannot silently rewrite the files that constrain it, and every run is reviewable and reversible.
 
-> **Status at a glance.** The machine-readable constitution, the state machine, the contract/DR validators, and the DSL compiler are **implemented and tested** today. Physical isolation (process suspension, read-only locking, file-write monitoring) is **best-effort or planned** — see the [Maturity note](#cli-commands) and the Implementation Phases table below. README claims describe the target design, not all currently-shipping behavior.
+> **Start here — the wedge that ships today:**
+> ```bash
+> pip install -e .
+> clada run -- echo ok                 # supervise any command
+> bash examples/protected_write_demo.sh  # full offline demo (no LLM, no API cost)
+> ```
+> See the annotated walkthrough in [`docs/demo.md`](docs/demo.md).
+
+> **Status at a glance.** The `clada run` session supervisor, the policy engine
+> with fail-closed degraded enforcement, the redacted JSONL event log, and the
+> audit report with safe path-scoped rollback are **implemented and tested**
+> today (Phases 1–5). The broader governance vision below — the interactive
+> Gateway state machine, Dual-Lock contract generation, process suspension, and
+> container isolation — is the **target design and is planned/best-effort**, not
+> all currently-shipping behavior. Each claim is marked. See the Implementation
+> Phases table and [`docs/known-limitations.md`](docs/known-limitations.md).
+
+## Runtime Safety Harness (shipping today)
+
+This is the part of CLADA that is implemented and covered by `tests/`. Run any
+agent under `clada run` and you get four guarantees on every session:
+
+| Guarantee | How |
+|-----------|-----|
+| **Guardrails are protected** | CLADA `chmod`-hardens its own decision/runtime directories to read-only and (when `fswatch` is present) monitors them; the agent cannot rewrite the files that constrain it. *Best-effort speed-bump, not a sandbox — see [known limitations](docs/known-limitations.md).* |
+| **Honest degraded mode** | If hardening or monitoring is unavailable, CLADA records a structured *degraded* status and **fails closed** (exit `78`) rather than pretending to be protected. |
+| **Every session is logged** | One redacted JSONL event per line under `runtime/sessions/` — secrets are omitted before write. Schema: [`docs/jsonl-event-schema.md`](docs/jsonl-event-schema.md). |
+| **Safe, scoped rollback** | An audit report under `runtime/audits/` separates session-owned changes from pre-existing work and emits rollback commands targeting only what the session touched. |
+
+```bash
+clada run -- claude        # or: clada run -- codex, or any command
+```
+
+Try it offline, with no LLM and no API cost:
+
+```bash
+bash examples/protected_write_demo.sh
+```
+
+The demo runs a shell "agent" that attempts a protected write, shows it being
+blocked, and prints the session log, audit report, and rollback plan. Full
+walkthrough: [`docs/demo.md`](docs/demo.md) · examples: [`examples/`](examples/).
+
+---
 
 ## Design Philosophy
+
+> The sections from here on describe the **broader governance design** CLADA is
+> growing toward. Much of it (the interactive Gateway, Dual-Lock generation,
+> process suspension, container isolation) is **planned or best-effort**, not yet
+> shipping — each item is marked in the Key Features and Implementation Phases
+> tables. The runtime harness above is the part that works today.
 
 AI coding agents are powerful but unbounded. They hallucinate, drift from specs, and resist rollback after hundreds of iterations. CLADA imposes **constitutional constraints** on autonomous development through three interlocking mechanisms:
 
@@ -101,19 +150,38 @@ CLADA/
 │   └── clada/                 # Python package
 │       ├── __init__.py        # Package exports
 │       ├── __main__.py        # CLI entry point (python -m clada / clada)
-│       ├── orchestrator.py    # State machine + PTY manager + Gateway REPL
+│       ├── session.py         # clada run Session Supervisor + JSONL log (Phase 2)
+│       ├── policy.py          # Path policy + degraded enforcement + redaction (Phase 3)
+│       ├── audit.py           # Session audit report generation (Phase 4)
+│       ├── checkpoint.py      # Git checkpoint + path-scoped rollback (Phase 4)
+│       ├── orchestrator.py    # State machine + PTY manager + FileAccessProxy
 │       ├── bootstrap.py       # Bootstrap flow + Memory Manager
 │       ├── contract_validator.py  # Contract/DR validation + L2 index
 │       ├── config.py          # LLM role configuration (.clada/config.yml)
 │       └── dsl/               # S-expression DSL → contract.json + spec.md
-├── tests/                     # Baseline pytest suite (state machine, validators, DSL)
+├── examples/                  # Offline runtime-harness demo (no LLM)
+│   ├── protected_write_demo.sh
+│   └── agent_sim.sh
+├── tests/                     # pytest suite (supervisor, policy, audit, checkpoint, validators, DSL)
 ├── docs/
-│   └── CLADA_Complete_Spec.html  # Full technical specification
+│   ├── demo.md                # Demo walkthrough: output, log, audit, rollback
+│   ├── jsonl-event-schema.md  # Session JSONL event schema + examples
+│   ├── known-limitations.md   # macOS chmod/fswatch semantics + deferred scope
+│   └── CLADA_Complete_Spec.html  # Target/design architecture spec (planned vision, not all implemented)
 ├── pyproject.toml             # Packaging + console script (clada)
 ├── requirements.txt           # Flat dependency mirror of pyproject.toml
 ├── .gitignore
 └── README.md
 ```
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [`docs/demo.md`](docs/demo.md) | End-to-end demo: expected output, session log, audit report, rollback path. |
+| [`docs/jsonl-event-schema.md`](docs/jsonl-event-schema.md) | Field-by-field schema for every session JSONL event, with examples and exit codes. |
+| [`docs/known-limitations.md`](docs/known-limitations.md) | What `chmod`/`fswatch` protection does and does not give you, fail-closed behavior, and explicitly deferred scope. |
+| [`examples/README.md`](examples/README.md) | How to run the offline demo and swap in a real agent. |
 
 ## Quick Start
 
@@ -147,14 +215,45 @@ after `pip install -e .`:
 pytest                            # runs the baseline suite under tests/
 ```
 
-### First Run
+### First Run — supervise an agent with `clada run`
+
+The primary entry point. `clada run -- <command>` wraps any process in the
+runtime safety harness (policy gate → session log → audit report → rollback):
+
+```bash
+clada run -- echo ok              # smoke test: supervise a trivial command
+clada run -- claude               # supervise a real agent (needs the Claude Code CLI)
+clada run -- codex                # …or any command on your PATH
+```
+
+Then inspect what the session produced:
+
+```bash
+ls runtime/sessions/              # <session-id>.jsonl — structured event log
+ls runtime/audits/                # <session-id>.md   — audit report + rollback plan
+```
+
+Prefer to see it end to end without an LLM? Run the offline demo:
+
+```bash
+bash examples/protected_write_demo.sh   # see docs/demo.md for the walkthrough
+```
+
+> If `clada run` exits `78`, enforcement was degraded and CLADA failed closed
+> (commonly: `fswatch` not installed). Install `fswatch` and retry, or see
+> [`docs/known-limitations.md`](docs/known-limitations.md).
+
+### Other commands (no project needed)
 
 ```bash
 clada help                        # list all commands
-clada dsl domains                 # list built-in DSL domains (no project needed)
+clada dsl domains                 # list built-in DSL domains
 ```
 
-### Bootstrap a New Project
+### Bootstrap a New Project (planned governance flow)
+
+> The interactive Gateway and Bootstrap flow are **planned/best-effort** — not
+> part of the shipping runtime harness. See the Implementation Phases table.
 
 ```bash
 cd your-project
@@ -181,6 +280,7 @@ clada> /autopilot [on|off] Toggle Owner-offline mode
 After `pip install -e .` these are available both as `clada <cmd>` and `python3 -m clada <cmd>`.
 
 ```bash
+clada run -- <command>    # Supervise a command (session log + audit + rollback)
 clada status              # Show system state
 clada validate contract   # Validate docs/spec/contract.json
 clada validate dr <file>  # Validate a DR-xxx.md file
@@ -193,11 +293,16 @@ clada dsl template <dom>  # Print a DSL template for a domain
 clada config init         # Create a default .clada/config.yml
 ```
 
-> **Maturity note (Phase 1).** Installable packaging, the state machine, the
-> contract/DR validators, and the DSL compiler are implemented and covered by
-> the `tests/` suite. The live Gateway loop (`clada` with no args), PTY
-> suspension, `fswatch` monitoring, and `clada run` are best-effort or planned —
-> see the Implementation Phases and Technical Risk Register below.
+> **Maturity note.** Implemented and covered by the `tests/` suite: the
+> `clada run` session supervisor (Phase 2), the policy engine with fail-closed
+> degraded enforcement and redaction (Phase 3), the audit report with safe
+> path-scoped rollback (Phase 4), installable packaging, the state machine, the
+> contract/DR validators, and the DSL compiler (Phase 1). Best-effort or
+> planned: the live interactive Gateway loop (`clada` with no args), PTY
+> suspension, and container isolation — see the Implementation Phases table,
+> the Technical Risk Register, and [`docs/known-limitations.md`](docs/known-limitations.md).
+> `fswatch` monitoring works when `fswatch` is installed; without it, `clada run`
+> fails closed rather than running unprotected.
 
 > **Policy & degraded enforcement (Phase 3).** Path protection is an explicit,
 > testable policy (`clada.policy`): which paths are secret-bearing, which the
@@ -211,11 +316,17 @@ clada config init         # Create a default .clada/config.yml
 
 ## Implementation Phases
 
+The project is delivered as a runtime-safety-harness wedge first, with the
+broader governance UI layered on later.
+
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **Phase 1** | PTY wrapping, State Machine, Contract Validator, Bootstrap | In progress |
-| **Phase 2** | Docker test isolation, chmod locks, fswatch, Heartbeat, L2 index | Planned |
-| **Phase 3** | Dual-Lock Bootstrap UI, L3 vector DB, Clean Shutdown, Owner console | Planned |
+| **Phase 1** | Installable packaging, State Machine, Contract/DR Validators, DSL compiler, baseline tests | Done |
+| **Phase 2** | `clada run` Session Supervisor + redacted JSONL event log | Done |
+| **Phase 3** | Policy engine, honest degraded enforcement, fail-closed gate, redaction | Done |
+| **Phase 4** | Audit report + safe, path-scoped session rollback | Done |
+| **Phase 5** | Reproducible demo, docs aligned to implemented behavior | Done |
+| **Later** | Live interactive Gateway, Dual-Lock Bootstrap, PTY suspension, container isolation, L3 memory | Planned / best-effort |
 
 ## Technical Risk Register
 
